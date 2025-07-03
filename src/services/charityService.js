@@ -22,7 +22,7 @@ exports.update = async (id, data) => {
   await charity.update(data);
   return charity;
 };
-
+    
 exports.delete = async (id) => {
   const charity = await Charity.findByPk(id);
   if (!charity) throw new AppError('Không tìm thấy tổ chức từ thiện', 404);
