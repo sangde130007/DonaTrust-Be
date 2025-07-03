@@ -1,3 +1,4 @@
+
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
@@ -24,9 +25,8 @@ exports.register = async (data) => {
   const { user_id, full_name, email, phone, password, role } = data;
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // Generate email verification token
   const verificationToken = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '1h' });
-  const verificationExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // Expires in 1 hour
+  const verificationExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
   const user = await User.create({
     user_id,
@@ -39,7 +39,6 @@ exports.register = async (data) => {
     email_verification_expires_at: verificationExpiresAt,
   });
 
-  // Send verification email
   const verificationUrl = `${process.env.EMAIL_VERIFICATION_URL}?token=${verificationToken}`;
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
@@ -62,12 +61,17 @@ exports.verifyEmail = async (token) => {
   try {
     payload = jwt.verify(token, process.env.JWT_SECRET);
   } catch (error) {
+    console.error('Lỗi xác thực token:', error);
     throw new AppError('Token xác thực không hợp lệ hoặc đã hết hạn', 400);
   }
 
   const user = await User.findOne({ where: { email: payload.email } });
-  if (!user) throw new AppError('Không tìm thấy người dùng', 404);
+  if (!user) {
+    console.error('Không tìm thấy người dùng với email:', payload.email);
+    throw new AppError('Không tìm thấy người dùng', 404);
+  }
   if (user.email_verification_token !== token || user.email_verification_expires_at < new Date()) {
+    console.error('Token không hợp lệ hoặc đã hết hạn:', { token, expires_at: user.email_verification_expires_at });
     throw new AppError('Token xác thực không hợp lệ hoặc đã hết hạn', 400);
   }
 
@@ -77,15 +81,18 @@ exports.verifyEmail = async (token) => {
     email_verification_expires_at: null,
   });
 
+  console.log('Email xác thực thành công cho user:', user.email);
   return user;
 };
 
 exports.login = async ({ email, password }) => {
   const user = await User.findOne({ where: { email } });
   if (!user || !await bcrypt.compare(password, user.password)) {
+    console.error('Thông tin đăng nhập không hợp lệ:', { email });
     throw new AppError('Thông tin đăng nhập không hợp lệ', 401);
   }
   if (!user.email_verified) {
+    console.error('Email chưa được xác thực:', { email, email_verified: user.email_verified });
     throw new AppError('Email chưa được xác thực', 403);
   }
   const token = jwt.sign({ user_id: user.user_id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
@@ -110,7 +117,7 @@ exports.googleLogin = async (code) => {
       phone: 'not_set',
       password: 'google_oauth',
       role: 'donor',
-      email_verified: true, // Google OAuth xác thực email tự động
+      email_verified: true,
     });
     await UserSocialLink.create({
       user_id: user.user_id,

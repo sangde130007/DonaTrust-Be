@@ -19,7 +19,7 @@ const User = sequelize.define('User', {
     unique: true,
     allowNull: false,
   },
-  otp_verified: {
+  email_verified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
   },
