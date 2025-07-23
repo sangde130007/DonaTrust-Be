@@ -8,6 +8,7 @@ const Vote = require('./Vote');
 const Feedback = require('./Feedback');
 const Notification = require('./Notification');
 const News = require('./News');
+const DaoApplication = require('./DaoApplication');
 
 // User associations
 User.hasOne(Charity, { foreignKey: 'user_id', as: 'charity' });
@@ -17,6 +18,7 @@ User.hasMany(Feedback, { foreignKey: 'user_id', as: 'feedbacks' });
 User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
 User.hasOne(UserSocialLink, { foreignKey: 'user_id', as: 'social_links' });
 User.hasMany(News, { foreignKey: 'author_id', as: 'news' });
+User.hasOne(DaoApplication, { foreignKey: 'user_id', as: 'dao_application' });
 
 // Charity associations
 Charity.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -55,6 +57,9 @@ Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 // News associations
 News.belongsTo(User, { foreignKey: 'author_id', as: 'author' });
 
+// DaoApplication associations
+DaoApplication.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 module.exports = {
 	User,
 	Charity,
@@ -66,4 +71,5 @@ module.exports = {
 	Feedback,
 	Notification,
 	News,
+	DaoApplication,
 };

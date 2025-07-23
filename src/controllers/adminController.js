@@ -359,6 +359,25 @@ class AdminController {
 		},
 	];
 
+	/**
+	 * @swagger
+	 * /api/admin/users/{id}/role:
+	 *   put:
+	 *     summary: Đổi role người dùng
+	 *     tags: [Admin Management]
+	 */
+	updateUserRole = [
+		async (req, res, next) => {
+			try {
+				const { role } = req.body;
+				const user = await adminService.updateUserRole(req.params.id, role, req.user.user_id);
+				res.json(user);
+			} catch (error) {
+				next(error);
+			}
+		},
+	];
+
 	// ================================
 	// VOTING MANAGEMENT
 	// ================================

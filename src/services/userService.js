@@ -3,6 +3,8 @@ const User = require('../models/User');
 const { AppError } = require('../utils/errorHandler');
 const { USER_STATUS } = require('../config/constants');
 const logger = require('../utils/logger');
+const path = require('path');
+const fs = require('fs');
 
 exports.create = async (data) => {
 	const user = await User.create(data);
@@ -58,18 +60,8 @@ exports.updateProfile = async (userId, updateData) => {
 		updateData.phone_verified_at = null;
 	}
 
-	// Không cho phép update một số fields nhạy cảm
-	const allowedFields = [
-		'full_name',
-		'phone',
-		'district',
-		'ward',
-		'address',
-		'date_of_birth',
-		'gender',
-		'bio',
-		'profile_image',
-	];
+	// Only allow specific fields to be updated (removed profile_image from here)
+	const allowedFields = ['full_name', 'phone', 'district', 'ward', 'address', 'date_of_birth', 'gender', 'bio'];
 
 	const filteredData = {};
 	for (const field of allowedFields) {
@@ -109,33 +101,77 @@ exports.changePassword = async (userId, currentPassword, newPassword) => {
 	return { message: 'Đổi mật khẩu thành công' };
 };
 
+// userService.js - uploadAvatar method
 exports.uploadAvatar = async (userId, file) => {
-	if (!file) {
-		throw new AppError('Không có file được upload', 400);
+	try {
+		if (!file) {
+			throw new AppError('Không có file được upload', 400);
+		}
+
+		console.log('📁 Processing avatar upload:', {
+			userId,
+			filename: file.filename,
+			originalname: file.originalname,
+			mimetype: file.mimetype,
+			size: file.size,
+			path: file.path,
+		});
+
+		const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+		if (!allowedTypes.includes(file.mimetype)) {
+			throw new AppError('Chỉ cho phép upload file ảnh (JPEG, PNG, GIF, WebP)', 400);
+		}
+
+		const user = await User.findByPk(userId);
+		if (!user) {
+			throw new AppError('Không tìm thấy người dùng', 404);
+		}
+
+		// Get old avatar path for cleanup
+		const oldAvatarUrl = user.profile_image;
+
+		// Create new avatar URL with FULL URL
+		const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+		const avatarUrl = `${baseUrl}/uploads/avatars/${file.filename}`;
+
+		// Update user with new avatar URL
+		await user.update({ profile_image: avatarUrl });
+
+		// Clean up old avatar file (if it exists and is not a default image)
+		if (oldAvatarUrl && oldAvatarUrl.includes('/uploads/avatars/')) {
+			try {
+				// Extract filename from old URL
+				const oldFilename = oldAvatarUrl.split('/').pop();
+				const oldFilePath = path.join(__dirname, '../../uploads/avatars/', oldFilename);
+				if (fs.existsSync(oldFilePath)) {
+					fs.unlinkSync(oldFilePath);
+					console.log('🗑️ Cleaned up old avatar:', oldFilePath);
+				}
+			} catch (cleanupError) {
+				console.warn('⚠️ Failed to cleanup old avatar:', cleanupError.message);
+			}
+		}
+
+		logger.info(`Avatar uploaded successfully: ${user.email}, file: ${file.filename}`);
+
+		return {
+			message: 'Avatar uploaded successfully',
+			avatar_url: avatarUrl, // Full URL
+			user: { ...user.toJSON(), password: undefined },
+		};
+	} catch (error) {
+		// Clean up uploaded file on error
+		if (file && file.path && fs.existsSync(file.path)) {
+			try {
+				fs.unlinkSync(file.path);
+				console.log('🗑️ Cleaned up failed upload file:', file.path);
+			} catch (cleanupError) {
+				console.warn('⚠️ Failed to cleanup upload file:', cleanupError.message);
+			}
+		}
+
+		throw error;
 	}
-
-	// Kiểm tra loại file (multer đã filter rồi nhưng double check)
-	const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-	if (!allowedTypes.includes(file.mimetype)) {
-		throw new AppError('Chỉ cho phép upload file ảnh (JPEG, PNG, GIF, WebP)', 400);
-	}
-
-	const user = await User.findByPk(userId);
-	if (!user) {
-		throw new AppError('Không tìm thấy người dùng', 404);
-	}
-
-	// Sử dụng filename mà multer đã tạo
-	const avatarUrl = `/uploads/avatars/${file.filename}`;
-
-	await user.update({ profile_image: avatarUrl });
-
-	logger.info(`Avatar uploaded successfully: ${user.email}, file: ${file.filename}`);
-	return {
-		message: 'Upload ảnh đại diện thành công',
-		avatar_url: avatarUrl,
-		user: { ...user.toJSON(), password: undefined },
-	};
 };
 
 exports.deactivateAccount = async (userId) => {

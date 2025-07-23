@@ -4,9 +4,9 @@ const validate = require('../middleware/validationMiddleware');
 
 /**
  * @swagger
- * /api/auth/register:
+ * /api/auth/google:
  *   post:
- *     summary: Đăng ký tài khoản mới
+ *     summary: Đăng nhập bằng Google
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -14,53 +14,77 @@ const validate = require('../middleware/validationMiddleware');
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - full_name
- *               - email
- *               - phone
- *               - password
  *             properties:
- *               full_name:
+ *               token:
  *                 type: string
- *                 example: "Nguyễn Văn A"
- *                 description: "Họ và tên đầy đủ"
- *               email:
+ *                 example: "eyJhbGciOiJSUzI1NiIsImtpZCI6..."
+ *                 description: Google ID Token từ frontend
+ *               code:
  *                 type: string
- *                 format: email
- *                 example: "user@example.com"
- *                 description: "Email duy nhất"
- *               phone:
- *                 type: string
- *                 example: "0901234567"
- *                 description: "Số điện thoại (10-11 số)"
- *               password:
- *                 type: string
- *                 minLength: 6
- *                 example: "Password123"
- *                 description: "Mật khẩu (ít nhất 6 ký tự, có chữ hoa, chữ thường, số)"
+ *                 example: "4/0AX4XfWi..."
+ *                 description: Google Authorization Code (alternative)
  *     responses:
- *       201:
- *         description: Đăng ký thành công
+ *       200:
+ *         description: Đăng nhập Google thành công
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 message:
+ *                 token:
  *                   type: string
- *                   example: "Đăng ký thành công, vui lòng kiểm tra email để xác thực"
  *                 user:
  *                   $ref: '#/components/schemas/User'
- *                 emailConfigured:
- *                   type: boolean
- *                   example: true
  *       400:
- *         description: Lỗi validation hoặc email/phone đã tồn tại
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         description: Token Google không hợp lệ
  */
+exports.googleLogin = [
+	// Validate that either token or code is provided
+	check('token').optional().notEmpty().withMessage('Google token không được để trống'),
+	check('code').optional().notEmpty().withMessage('Google code không được để trống'),
+	// Custom validation to ensure at least one is provided
+	(req, res, next) => {
+		if (!req.body.token && !req.body.code) {
+			return res.status(400).json({
+				status: 'error',
+				message: 'Cần cung cấp Google token hoặc authorization code',
+			});
+		}
+		next();
+	},
+	validate,
+	async (req, res, next) => {
+		try {
+			console.log('🔍 Google login request body:', {
+				hasToken: !!req.body.token,
+				hasCode: !!req.body.code,
+				tokenPreview: req.body.token ? req.body.token.substring(0, 50) + '...' : null,
+				codePreview: req.body.code ? req.body.code.substring(0, 20) + '...' : null,
+			});
+
+			let result;
+
+			// Handle Google ID Token (from @react-oauth/google)
+			if (req.body.token) {
+				console.log('📱 Processing Google ID Token...');
+				result = await authService.googleLoginWithToken(req.body.token);
+			}
+			// Handle Google Authorization Code (traditional OAuth flow)
+			else if (req.body.code) {
+				console.log('🔐 Processing Google Authorization Code...');
+				result = await authService.googleLoginWithCode(req.body.code);
+			}
+
+			console.log('✅ Google login successful for user:', result.user.email);
+			res.json(result);
+		} catch (error) {
+			console.error('❌ Google login failed:', error.message);
+			next(error);
+		}
+	},
+];
+
+// Other auth controllers remain the same...
 exports.register = [
 	check('email').isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
 	check('password')
@@ -87,87 +111,6 @@ exports.register = [
 	},
 ];
 
-/**
- * @swagger
- * /api/auth/verify-email:
- *   get:
- *     summary: Xác thực email
- *     tags: [Authentication]
- *     parameters:
- *       - in: query
- *         name: token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token xác thực email
- *     responses:
- *       200:
- *         description: Xác thực email thành công
- *       400:
- *         description: Token không hợp lệ hoặc đã hết hạn
- */
-exports.verifyEmail = [
-	check('token').notEmpty().withMessage('Token xác thực là bắt buộc'),
-	validate,
-	async (req, res, next) => {
-		try {
-const user = await authService.verifyEmail(req.query.token);
-
-if (user.alreadyVerified) {
-	return res.json({ message: 'Email đã được xác thực trước đó', user });
-}
-
-res.json({ message: 'Xác thực email thành công', user });
-
-		} catch (error) {
-			next(error);
-		}
-	},
-];
-
-/**
- * @swagger
- * /api/auth/login:
- *   post:
- *     summary: Đăng nhập
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "user@example.com"
- *               password:
- *                 type: string
- *                 example: "password123"
- *     responses:
- *       200:
- *         description: Đăng nhập thành công
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 token:
- *                   type: string
- *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *                 user:
- *                   $ref: '#/components/schemas/User'
- *       401:
- *         description: Thông tin đăng nhập không chính xác
- *       403:
- *         description: Email chưa được xác thực hoặc tài khoản bị khóa
- *       423:
- *         description: Tài khoản bị khóa do đăng nhập sai quá nhiều lần
- */
 exports.login = [
 	check('email').isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
 	check('password').notEmpty().withMessage('Mật khẩu là bắt buộc'),
@@ -182,76 +125,19 @@ exports.login = [
 	},
 ];
 
-/**
- * @swagger
- * /api/auth/google:
- *   post:
- *     summary: Đăng nhập bằng Google
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - code
- *             properties:
- *               code:
- *                 type: string
- *                 example: "4/0AX4XfWi..."
- *                 description: Authorization code từ Google OAuth
- *     responses:
- *       200:
- *         description: Đăng nhập Google thành công
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 token:
- *                   type: string
- *                 user:
- *                   $ref: '#/components/schemas/User'
- *       400:
- *         description: Mã Google OAuth không hợp lệ
- */
-exports.googleLogin = [
-	check('code').notEmpty().withMessage('Mã Google OAuth là bắt buộc'),
+exports.verifyEmail = [
+	check('token').notEmpty().withMessage('Token xác thực là bắt buộc'),
 	validate,
 	async (req, res, next) => {
 		try {
-			const { token, user } = await authService.googleLogin(req.body.code);
-			res.json({ token, user });
+			const user = await authService.verifyEmail(req.query.token);
+			res.json({ message: 'Xác thực email thành công', user });
 		} catch (error) {
 			next(error);
 		}
 	},
 ];
 
-/**
- * @swagger
- * /api/auth/forgot-password:
- *   post:
- *     summary: Quên mật khẩu
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "user@example.com"
- *     responses:
- *       200:
- *         description: Email reset password đã được gửi (nếu email tồn tại)
- */
 exports.forgotPassword = [
 	check('email').isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
 	validate,
@@ -265,35 +151,6 @@ exports.forgotPassword = [
 	},
 ];
 
-/**
- * @swagger
- * /api/auth/reset-password:
- *   post:
- *     summary: Đặt lại mật khẩu
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - token
- *               - password
- *             properties:
- *               token:
- *                 type: string
- *                 example: "reset_token_here"
- *               password:
- *                 type: string
- *                 minLength: 6
- *                 example: "newPassword123"
- *     responses:
- *       200:
- *         description: Mật khẩu đã được đặt lại thành công
- *       400:
- *         description: Token không hợp lệ hoặc đã hết hạn
- */
 exports.resetPassword = [
 	check('token').notEmpty().withMessage('Token reset password là bắt buộc'),
 	check('password')
@@ -312,22 +169,6 @@ exports.resetPassword = [
 	},
 ];
 
-/**
- * @swagger
- * /api/auth/send-phone-verification:
- *   post:
- *     summary: Gửi mã xác thực số điện thoại
- *     tags: [Authentication]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Mã xác thực đã được gửi
- *       401:
- *         description: Token không hợp lệ
- *       404:
- *         description: Không tìm thấy người dùng
- */
 exports.sendPhoneVerification = [
 	async (req, res, next) => {
 		try {
@@ -339,33 +180,6 @@ exports.sendPhoneVerification = [
 	},
 ];
 
-/**
- * @swagger
- * /api/auth/verify-phone:
- *   post:
- *     summary: Xác thực số điện thoại
- *     tags: [Authentication]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - code
- *             properties:
- *               code:
- *                 type: string
- *                 example: "123456"
- *                 description: Mã xác thực 6 số
- *     responses:
- *       200:
- *         description: Số điện thoại đã được xác thực thành công
- *       400:
- *         description: Mã xác thực không chính xác
- */
 exports.verifyPhone = [
 	check('code')
 		.isLength({ min: 6, max: 6 })
@@ -383,18 +197,6 @@ exports.verifyPhone = [
 	},
 ];
 
-/**
- * @swagger
- * /api/auth/logout:
- *   post:
- *     summary: Đăng xuất
- *     tags: [Authentication]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Đăng xuất thành công
- */
 exports.logout = [
 	async (req, res, next) => {
 		try {
@@ -406,25 +208,6 @@ exports.logout = [
 	},
 ];
 
-/**
- * @swagger
- * /api/auth/refresh-token:
- *   post:
- *     summary: Làm mới token
- *     tags: [Authentication]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Token mới đã được tạo
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 token:
- *                   type: string
- */
 exports.refreshToken = [
 	async (req, res, next) => {
 		try {

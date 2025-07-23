@@ -672,6 +672,42 @@ router.put('/users/:id/ban', adminController.banUser);
  */
 router.put('/users/:id/unban', adminController.unbanUser);
 
+/**
+ * @swagger
+ * /api/admin/users/{id}/role:
+ *   put:
+ *     summary: Đổi role người dùng
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của người dùng
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               role:
+ *                 type: string
+ *                 enum: [donor, charity, dao_member]
+ *                 example: donor
+ *     responses:
+ *       200:
+ *         description: Đổi role thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ */
+router.put('/users/:id/role', adminController.updateUserRole);
+
 // ================================
 // VOTING MANAGEMENT
 // ================================

@@ -32,6 +32,11 @@ module.exports = {
 		APPROVED: 'approved',
 		REJECTED: 'rejected',
 	},
+	DAO_APPLICATION_STATUS: {
+		PENDING: 'pending',
+		APPROVED: 'approved',
+		REJECTED: 'rejected',
+	},
 	FINANCIAL_REPORT_TYPES: {
 		MONTHLY: 'monthly',
 		QUARTERLY: 'quarterly',

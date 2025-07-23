@@ -70,9 +70,6 @@ exports.getProfile = async (req, res, next) => {
  *               bio:
  *                 type: string
  *                 example: "Mô tả về bản thân"
- *               profile_image:
- *                 type: string
- *                 example: "https://example.com/image.jpg"
  *     responses:
  *       200:
  *         description: Cập nhật hồ sơ thành công
@@ -92,29 +89,13 @@ exports.updateProfile = [
 		.matches(/^[a-zA-ZÀ-ỹ\s]*$/)
 		.withMessage('Họ tên chỉ được chứa chữ cái và khoảng trắng'),
 
-	check('phone')
-		.optional()
-		.trim()
-		.isMobilePhone('vi-VN')
-		.withMessage('Số điện thoại không hợp lệ'),
+	check('phone').optional().trim().isMobilePhone('vi-VN').withMessage('Số điện thoại không hợp lệ'),
 
-	check('district')
-		.optional()
-		.trim()
-		.isLength({ min: 2, max: 100 })
-		.withMessage('Quận/Huyện phải từ 2-100 ký tự'),
+	check('district').optional().trim().isLength({ min: 2, max: 100 }).withMessage('Quận/Huyện phải từ 2-100 ký tự'),
 
-	check('ward')
-		.optional()
-		.trim()
-		.isLength({ min: 2, max: 100 })
-		.withMessage('Phường/Xã phải từ 2-100 ký tự'),
+	check('ward').optional().trim().isLength({ min: 2, max: 100 }).withMessage('Phường/Xã phải từ 2-100 ký tự'),
 
-	check('address')
-		.optional()
-		.trim()
-		.isLength({ min: 5, max: 200 })
-		.withMessage('Địa chỉ phải từ 5-200 ký tự'),
+	check('address').optional().trim().isLength({ min: 5, max: 200 }).withMessage('Địa chỉ phải từ 5-200 ký tự'),
 
 	check('date_of_birth')
 		.optional()
@@ -129,29 +110,18 @@ exports.updateProfile = [
 			return true;
 		}),
 
-	check('gender')
-		.optional()
-		.trim()
-		.isIn(['male', 'female', 'other'])
-		.withMessage('Giới tính không hợp lệ'),
+	check('gender').optional().trim().isIn(['male', 'female', 'other']).withMessage('Giới tính không hợp lệ'),
 
-	check('bio')
-		.optional()
-		.trim()
-		.isLength({ max: 255 })
-		.withMessage('Mô tả không được vượt quá 255 ký tự'),
-
-	check('profile_image')
-		.optional()
-		.trim()
-		.isURL()
-		.withMessage('URL ảnh đại diện không hợp lệ'),
+	check('bio').optional().trim().isLength({ max: 255 }).withMessage('Mô tả không được vượt quá 255 ký tự'),
 
 	validate,
 	async (req, res, next) => {
 		try {
 			const user = await userService.updateProfile(req.user.user_id, req.body);
-			res.json(user);
+			res.json({
+				message: 'Profile updated successfully',
+				user: user,
+			});
 		} catch (error) {
 			next(error);
 		}
@@ -229,17 +199,77 @@ exports.changePassword = [
  *               avatar:
  *                 type: string
  *                 format: binary
+ *                 description: Avatar image file (JPEG, PNG, GIF, WebP, max 5MB)
  *     responses:
  *       200:
  *         description: Upload ảnh thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Avatar uploaded successfully"
+ *                 avatar_url:
+ *                   type: string
+ *                   example: "/uploads/avatars/user123-1640995200000-123456789.jpg"
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
  *       400:
  *         description: File không hợp lệ
+ *       413:
+ *         description: File quá lớn
  */
 exports.uploadAvatar = async (req, res, next) => {
 	try {
+		console.log('📁 Avatar upload request:', {
+			userId: req.user?.user_id,
+			file: req.file
+				? {
+						filename: req.file.filename,
+						originalname: req.file.originalname,
+						mimetype: req.file.mimetype,
+						size: req.file.size,
+				  }
+				: 'No file',
+		});
+
+		if (!req.file) {
+			return res.status(400).json({
+				status: 'error',
+				message: 'No file uploaded. Please select an image file.',
+			});
+		}
+
+		// Validate file type (double check after multer)
+		const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+		if (!allowedTypes.includes(req.file.mimetype)) {
+			return res.status(400).json({
+				status: 'error',
+				message: 'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.',
+			});
+		}
+
+		// Validate file size (double check after multer)
+		const maxSize = 5 * 1024 * 1024; // 5MB
+		if (req.file.size > maxSize) {
+			return res.status(413).json({
+				status: 'error',
+				message: 'File too large. Please select an image smaller than 5MB.',
+			});
+		}
+
 		const result = await userService.uploadAvatar(req.user.user_id, req.file);
+
+		console.log('✅ Avatar upload successful:', {
+			userId: req.user.user_id,
+			avatarUrl: result.avatar_url,
+		});
+
 		res.json(result);
 	} catch (error) {
+		console.error('❌ Avatar upload failed:', error);
 		next(error);
 	}
 };

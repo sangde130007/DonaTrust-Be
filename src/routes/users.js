@@ -22,6 +22,7 @@ router.put('/change-password', userController.changePassword);
 // Upload routes
 router.post('/upload-avatar', uploadAvatar, userController.uploadAvatar);
 
+// Account management
 router.put('/deactivate', userController.deactivateAccount);
 
 module.exports = router;

@@ -6,7 +6,7 @@ const dbConfig = {
 	port: 5432,
 	database: 'donastrust', // Change this to your database name
 	user: 'postgres', // Change this to your database user
-	password: 'postgres', // Change this to your database password
+	password: '123', // Change this to your database password
 };
 
 async function updateSchema() {

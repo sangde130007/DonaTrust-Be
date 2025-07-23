@@ -17,7 +17,7 @@ async function updateDatabaseSchema() {
 			ADD COLUMN IF NOT EXISTS "banned_at" TIMESTAMP,
 			ADD COLUMN IF NOT EXISTS "banned_by" VARCHAR(255),
 			ADD COLUMN IF NOT EXISTS "unbanned_at" TIMESTAMP,
-			ADD COLUMN IF NOT EXISTS "unbanned_by" VARCHAR(255)
+			ADD COLUMN IF NOT EXISTS "unbanned_by" VARCHAR(255);
 		`);
 		logger.info('✓ Đã cập nhật Users table');
 
@@ -27,7 +27,7 @@ async function updateDatabaseSchema() {
 			ADD COLUMN IF NOT EXISTS "approved_at" TIMESTAMP,
 			ADD COLUMN IF NOT EXISTS "approved_by" VARCHAR(255),
 			ADD COLUMN IF NOT EXISTS "rejected_at" TIMESTAMP,
-			ADD COLUMN IF NOT EXISTS "rejected_by" VARCHAR(255)
+			ADD COLUMN IF NOT EXISTS "rejected_by" VARCHAR(255);
 		`);
 		logger.info('✓ Đã cập nhật Campaigns table');
 
@@ -36,7 +36,7 @@ async function updateDatabaseSchema() {
 			ALTER TABLE "Charities" 
 			ADD COLUMN IF NOT EXISTS "verified_at" TIMESTAMP,
 			ADD COLUMN IF NOT EXISTS "verified_by" VARCHAR(255),
-			ADD COLUMN IF NOT EXISTS "rejection_reason" TEXT
+			ADD COLUMN IF NOT EXISTS "rejection_reason" TEXT;
 		`);
 		logger.info('✓ Đã cập nhật Charities table');
 
@@ -60,7 +60,7 @@ async function updateDatabaseSchema() {
 				"created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				"updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				FOREIGN KEY ("author_id") REFERENCES "Users"("user_id") ON DELETE CASCADE
-			)
+			);
 		`);
 		logger.info('✓ Đã tạo News table');
 

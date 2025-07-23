@@ -25,3 +25,5 @@ router.use('/admin', adminRoutes);
 router.use('/news', newsRoutes);
 
 module.exports = router;
+
+module.exports = router;
