@@ -296,12 +296,11 @@ sequelize
 	})
 	.then(async () => {
 		const PORT = process.env.PORT || 3000;
-		app.listen(PORT, () => {
-			logger.info(`Server đang chạy trên cổng ${PORT}`);
-			logger.info(`API Documentation: http://localhost:${PORT}/api-docs`);
-			logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
-		});
-
+		app.listen(PORT, '0.0.0.0', () => {
+    	logger.info(`Server đang chạy trên cổng ${PORT}`);
+    	logger.info(`API Documentation: http://localhost:${PORT}/api-docs`);
+    	logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+	});
 		// Tạo sample data nếu là development và chưa có dữ liệu
 		if (process.env.NODE_ENV === 'development') {
 			const { createSampleData } = require('./utils/seeders');
