@@ -1,12 +1,61 @@
 module.exports = {
-  ROLES: {
-    DONOR: 'donor',
-    CHARITY: 'charity',
-    ADMIN: 'admin',
-  },
-  CAMPAIGN_STATUSES: {
-    ACTIVE: 'active',
-    COMPLETED: 'completed',
-    PENDING: 'pending',
-  },
+	ROLES: {
+		DONOR: 'donor',
+		CHARITY: 'charity',
+		ADMIN: 'admin',
+		DAO_MEMBER: 'dao_member',
+	},
+	CAMPAIGN_STATUSES: {
+		ACTIVE: 'active',
+		COMPLETED: 'completed',
+		PENDING: 'pending',
+		PAUSED: 'paused',
+		CANCELLED: 'cancelled',
+	},
+	USER_STATUS: {
+		ACTIVE: 'active',
+		INACTIVE: 'inactive',
+		BANNED: 'banned',
+	},
+	TOKEN_TYPES: {
+		EMAIL_VERIFICATION: 'email_verification',
+		PASSWORD_RESET: 'password_reset',
+		PHONE_VERIFICATION: 'phone_verification',
+	},
+	CHARITY_VERIFICATION_STATUS: {
+		PENDING: 'pending',
+		VERIFIED: 'verified',
+		REJECTED: 'rejected',
+	},
+	CAMPAIGN_APPROVAL_STATUS: {
+		PENDING: 'pending',
+		APPROVED: 'approved',
+		REJECTED: 'rejected',
+	},
+	FINANCIAL_REPORT_TYPES: {
+		MONTHLY: 'monthly',
+		QUARTERLY: 'quarterly',
+		YEARLY: 'yearly',
+		CAMPAIGN: 'campaign',
+		CUSTOM: 'custom',
+	},
+	FINANCIAL_REPORT_STATUS: {
+		DRAFT: 'draft',
+		SUBMITTED: 'submitted',
+		APPROVED: 'approved',
+		PUBLISHED: 'published',
+		REJECTED: 'rejected',
+	},
+	CAMPAIGN_CATEGORIES: {
+		EDUCATION: 'education',
+		HEALTH: 'health',
+		ENVIRONMENT: 'environment',
+		POVERTY: 'poverty',
+		DISASTER: 'disaster',
+		CHILDREN: 'children',
+		ELDERLY: 'elderly',
+		DISABILITY: 'disability',
+		ANIMALS: 'animals',
+		COMMUNITY: 'community',
+	},
 };

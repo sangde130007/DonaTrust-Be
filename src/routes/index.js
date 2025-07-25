@@ -9,6 +9,8 @@ const donationRoutes = require('./donations');
 const feedbackRoutes = require('./feedbacks');
 const voteRoutes = require('./votes');
 const notificationRoutes = require('./notifications');
+const adminRoutes = require('./admin');
+const newsRoutes = require('./news');
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
@@ -19,5 +21,7 @@ router.use('/donations', donationRoutes);
 router.use('/feedbacks', feedbackRoutes);
 router.use('/votes', voteRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/admin', adminRoutes);
+router.use('/news', newsRoutes);
 
 module.exports = router;
