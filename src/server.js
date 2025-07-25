@@ -221,9 +221,9 @@ const specs = swaggerJsdoc(swaggerOptions);
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Allow non-browser requests
+    if (!origin) return callback(null, true);
     const allowedOrigins = [
-      'http://localhost:5173', 
+      'http://localhost:5173',
       'https://donatrust.info.vn'
     ];
     if (allowedOrigins.includes(origin)) {
@@ -235,6 +235,7 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200, // <--- Add this line
 }));
 
 app.use(express.json({ limit: '10mb' }));
