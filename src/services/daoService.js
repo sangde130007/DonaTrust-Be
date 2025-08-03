@@ -1,226 +1,439 @@
-const DaoApplication = require('../models/DaoApplication');
-const User = require('../models/User');
+// src/services/daoService.js
+const { Op } = require('sequelize');
+const { User, Campaign, Charity, CampaignVote } = require('../models/associations');
 const { AppError } = require('../utils/errorHandler');
-const { DAO_APPLICATION_STATUS, ROLES } = require('../config/constants');
+const { ROLES } = require('../config/constants');
 const logger = require('../utils/logger');
-const path = require('path');
-const fs = require('fs');
 
-/**
- * Đăng ký DAO member
- */
-exports.registerDao = async (userId, applicationData, files) => {
-  // Kiểm tra user tồn tại
-  const user = await User.findByPk(userId);
-  if (!user) {
-    throw new AppError('Không tìm thấy người dùng', 404);
-  }
+class DAOService {
+  /**
+   * Lấy danh sách campaigns chờ vote DAO
+   */
+  async getPendingCampaigns(query = {}) {
+    const { page = 1, limit = 10, category, search } = query;
+    const offset = (page - 1) * limit;
 
-  // Kiểm tra đã đăng ký chưa
-  const existingApplication = await DaoApplication.findOne({ where: { user_id: userId } });
-  if (existingApplication) {
-    throw new AppError('Bạn đã gửi đơn đăng ký DAO member rồi', 400);
-  }
+    const whereClause = {
+      approval_status: 'pending',
+      status: 'pending'
+    };
 
-  // Kiểm tra user đã là DAO member chưa
-  if (user.role === ROLES.DAO_MEMBER) {
-    throw new AppError('Bạn đã là DAO member rồi', 400);
-  }
-
-  // Xử lý file certificates
-  let certificateFiles = [];
-  if (files && files.length > 0) {
-    certificateFiles = files.map(file => ({
-      originalName: file.originalname,
-      filename: file.filename,
-      path: file.path,
-      size: file.size,
-      mimetype: file.mimetype,
-      uploadedAt: new Date(),
-    }));
-  }
-
-  // Tạo đơn đăng ký
-  const application = await DaoApplication.create({
-    user_id: userId,
-    full_name: applicationData.fullName,
-    email: applicationData.email,
-    introduction: applicationData.introduction,
-    experience: applicationData.experience,
-    areas_of_interest: applicationData.areasOfInterest,
-    certificate_files: certificateFiles,
-    status: DAO_APPLICATION_STATUS.PENDING,
-  });
-
-  logger.info(`DAO application submitted by user ${userId}`);
-  return application;
-};
-
-/**
- * Lấy đơn đăng ký DAO của user hiện tại
- */
-exports.getMyApplication = async (userId) => {
-  const application = await DaoApplication.findOne({
-    where: { user_id: userId },
-    include: [
-      {
-        model: User,
-        as: 'user',
-        attributes: ['user_id', 'full_name', 'email', 'phone', 'role'],
-      },
-    ],
-  });
-
-  if (!application) {
-    throw new AppError('Bạn chưa gửi đơn đăng ký DAO member', 404);
-  }
-
-  return application;
-};
-
-/**
- * Lấy tất cả đơn đăng ký DAO (admin only)
- */
-exports.getAllApplications = async (page = 1, limit = 10, status = null) => {
-  const offset = (page - 1) * limit;
-  const whereClause = {};
-
-  if (status) {
-    whereClause.status = status;
-  }
-
-  const { count, rows } = await DaoApplication.findAndCountAll({
-    where: whereClause,
-    include: [
-      {
-        model: User,
-        as: 'user',
-        attributes: ['user_id', 'full_name', 'email', 'phone', 'role'],
-      },
-    ],
-    order: [['created_at', 'DESC']],
-    limit: parseInt(limit),
-    offset: parseInt(offset),
-  });
-
-  return {
-    applications: rows,
-    totalPages: Math.ceil(count / limit),
-    currentPage: parseInt(page),
-    totalItems: count,
-  };
-};
-
-/**
- * Lấy chi tiết đơn đăng ký (admin only)
- */
-exports.getApplicationById = async (applicationId) => {
-  const application = await DaoApplication.findByPk(applicationId, {
-    include: [
-      {
-        model: User,
-        as: 'user',
-        attributes: ['user_id', 'full_name', 'email', 'phone', 'role'],
-      },
-    ],
-  });
-
-  if (!application) {
-    throw new AppError('Không tìm thấy đơn đăng ký', 404);
-  }
-
-  return application;
-};
-
-/**
- * Duyệt đơn đăng ký DAO (admin only)
- */
-exports.approveApplication = async (applicationId, adminId) => {
-  const application = await DaoApplication.findByPk(applicationId, {
-    include: [
-      {
-        model: User,
-        as: 'user',
-      },
-    ],
-  });
-
-  if (!application) {
-    throw new AppError('Không tìm thấy đơn đăng ký', 404);
-  }
-
-  if (application.status !== DAO_APPLICATION_STATUS.PENDING) {
-    throw new AppError('Đơn đăng ký đã được xử lý rồi', 400);
-  }
-
-  // Cập nhật application
-  await application.update({
-    status: DAO_APPLICATION_STATUS.APPROVED,
-    reviewed_by: adminId,
-    reviewed_at: new Date(),
-  });
-
-  // Cập nhật user role và thông tin DAO
-  await application.user.update({
-    role: ROLES.DAO_MEMBER,
-    dao_approved_at: new Date(),
-    dao_approved_by: adminId,
-  });
-
-  logger.info(`DAO application approved: ${applicationId} by admin ${adminId}`);
-  return application;
-};
-
-/**
- * Từ chối đơn đăng ký DAO (admin only)
- */
-exports.rejectApplication = async (applicationId, adminId, rejectionReason) => {
-  const application = await DaoApplication.findByPk(applicationId, {
-    include: [
-      {
-        model: User,
-        as: 'user',
-      },
-    ],
-  });
-
-  if (!application) {
-    throw new AppError('Không tìm thấy đơn đăng ký', 404);
-  }
-
-  if (application.status !== DAO_APPLICATION_STATUS.PENDING) {
-    throw new AppError('Đơn đăng ký đã được xử lý rồi', 400);
-  }
-
-  // Cập nhật application
-  await application.update({
-    status: DAO_APPLICATION_STATUS.REJECTED,
-    reviewed_by: adminId,
-    reviewed_at: new Date(),
-    rejection_reason: rejectionReason,
-  });
-
-  // Cập nhật user thông tin DAO
-  await application.user.update({
-    dao_rejected_at: new Date(),
-    dao_rejected_by: adminId,
-    dao_rejection_reason: rejectionReason,
-  });
-
-  logger.info(`DAO application rejected: ${applicationId} by admin ${adminId}`);
-  return application;
-};
-
-/**
- * Xóa file certificate
- */
-exports.deleteCertificateFile = (filePath) => {
-  try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      logger.info(`Certificate file deleted: ${filePath}`);
+    if (category) {
+      whereClause.category = category;
     }
-  } catch (error) {
-    logger.error(`Error deleting certificate file: ${filePath}`, error);
+
+    if (search) {
+      whereClause[Op.or] = [
+        { title: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } }
+      ];
+    }
+
+    const campaigns = await Campaign.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: Charity,
+          as: 'charity',
+          attributes: ['charity_id', 'name', 'verification_status'],
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['full_name', 'email'],
+            },
+          ],
+        }
+      ],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['created_at', 'ASC']],
+    });
+
+    // Lấy votes riêng cho mỗi campaign để tính statistics
+    const campaignsWithStats = await Promise.all(
+      campaigns.rows.map(async (campaign) => {
+        const votes = await CampaignVote.findAll({
+          where: { campaign_id: campaign.campaign_id },
+          include: [
+            {
+              model: User,
+              as: 'voter',
+              attributes: ['user_id', 'full_name'],
+            }
+          ]
+        });
+
+        const totalVotes = votes.length;
+        const approveVotes = votes.filter(v => v.vote_decision === 'approve').length;
+        const rejectVotes = votes.filter(v => v.vote_decision === 'reject').length;
+        const approvalRate = totalVotes > 0 ? (approveVotes / totalVotes) * 100 : 0;
+
+        return {
+          ...campaign.toJSON(),
+          vote_stats: {
+            total_votes: totalVotes,
+            approve_votes: approveVotes,
+            reject_votes: rejectVotes,
+            approval_rate: approvalRate.toFixed(1),
+            needs_more_votes: totalVotes < 5,
+            meets_threshold: approvalRate >= 50 && totalVotes >= 5,
+          }
+        };
+      })
+    );
+
+    return {
+      campaigns: campaignsWithStats,
+      total: campaigns.count,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(campaigns.count / limit),
+    };
   }
-}; 
+
+  /**
+   * Lấy chi tiết campaign với vote info
+   */
+  async getCampaignDetail(campaignId, userId) {
+    const campaign = await Campaign.findOne({
+      where: {
+        campaign_id: campaignId,
+        approval_status: 'pending'
+      },
+      include: [
+        {
+          model: Charity,
+          as: 'charity',
+          attributes: ['charity_id', 'name', 'verification_status', 'email', 'phone'],
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['user_id', 'full_name', 'email'],
+            },
+          ],
+        }
+      ],
+    });
+
+    if (!campaign) {
+      throw new AppError('Không tìm thấy chiến dịch hoặc chiến dịch đã được xử lý', 404);
+    }
+
+    // Lấy tất cả votes cho campaign này
+    const votes = await CampaignVote.findAll({
+      where: { campaign_id: campaignId },
+      include: [
+        {
+          model: User,
+          as: 'voter',
+          attributes: ['user_id', 'full_name'],
+        }
+      ]
+    });
+
+    // Kiểm tra user đã vote chưa
+    const userVote = votes.find(v => v.voter_id === userId);
+
+    // Tính toán vote stats
+    const totalVotes = votes.length;
+    const approveVotes = votes.filter(v => v.vote_decision === 'approve').length;
+    const rejectVotes = votes.filter(v => v.vote_decision === 'reject').length;
+    const approvalRate = totalVotes > 0 ? (approveVotes / totalVotes) * 100 : 0;
+
+    return {
+      ...campaign.toJSON(),
+      user_vote: userVote ? {
+        decision: userVote.vote_decision,
+        reason: userVote.vote_reason,
+        created_at: userVote.created_at
+      } : null,
+      vote_stats: {
+        total_votes: totalVotes,
+        approve_votes: approveVotes,
+        reject_votes: rejectVotes,
+        approval_rate: approvalRate.toFixed(1),
+        meets_threshold: approvalRate >= 50 && totalVotes >= 5,
+        voter_list: votes.map(v => ({
+          voter_name: v.voter?.full_name,
+          decision: v.vote_decision,
+          reason: v.vote_reason,
+          created_at: v.created_at
+        }))
+      }
+    };
+  }
+
+  /**
+   * Vote cho campaign
+   */
+  async voteCampaign(campaignId, voterId, voteData) {
+    const { decision, reason } = voteData;
+
+    // Kiểm tra user có role DAO member
+    const voter = await User.findByPk(voterId);
+    if (!voter || voter.role !== ROLES.DAO_MEMBER) {
+      throw new AppError('Chỉ thành viên DAO mới có quyền vote', 403);
+    }
+
+    // Kiểm tra campaign tồn tại và đang pending
+    const campaign = await Campaign.findOne({
+      where: {
+        campaign_id: campaignId,
+        approval_status: 'pending'
+      }
+    });
+
+    if (!campaign) {
+      throw new AppError('Không tìm thấy chiến dịch hoặc chiến dịch đã được xử lý', 404);
+    }
+
+    // Kiểm tra đã vote chưa
+    const existingVote = await CampaignVote.findOne({
+      where: {
+        campaign_id: campaignId,
+        voter_id: voterId
+      }
+    });
+
+    if (existingVote) {
+      throw new AppError('Bạn đã vote cho chiến dịch này rồi', 400);
+    }
+
+    // Tạo vote mới
+    const vote = await CampaignVote.create({
+      campaign_id: campaignId,
+      voter_id: voterId,
+      vote_decision: decision,
+      vote_reason: reason
+    });
+
+    // Kiểm tra và cập nhật trạng thái campaign nếu đủ votes
+    await this.checkAndUpdateCampaignStatus(campaignId);
+
+    logger.info(`DAO vote created: ${decision} for campaign ${campaignId} by user ${voterId}`);
+    return vote;
+  }
+
+  /**
+   * Kiểm tra và cập nhật trạng thái campaign dựa trên votes
+   */
+  async checkAndUpdateCampaignStatus(campaignId) {
+    // Lấy tất cả votes cho campaign
+    const votes = await CampaignVote.findAll({
+      where: { campaign_id: campaignId }
+    });
+
+    const totalVotes = votes.length;
+    const approveVotes = votes.filter(v => v.vote_decision === 'approve').length;
+    const approvalRate = totalVotes > 0 ? (approveVotes / totalVotes) * 100 : 0;
+
+    const campaign = await Campaign.findByPk(campaignId);
+
+    // Điều kiện: cần ít nhất 5 votes và > 50% approve
+    if (totalVotes >= 5) {
+      if (approvalRate > 50) {
+        // Đưa lên admin để duyệt
+        await campaign.update({
+          dao_approval_status: 'dao_approved',
+          dao_approved_at: new Date(),
+          dao_approval_rate: approvalRate.toFixed(1)
+        });
+
+        logger.info(`Campaign ${campaignId} passed DAO vote (${approvalRate.toFixed(1)}%) - sent to admin review`);
+      } else {
+        // Không đạt yêu cầu
+        await campaign.update({
+          dao_approval_status: 'dao_rejected',
+          dao_rejected_at: new Date(),
+          dao_approval_rate: approvalRate.toFixed(1),
+          rejection_reason: `Campaign không đạt yêu cầu vote DAO (${approvalRate.toFixed(1)}% approval rate)`
+        });
+
+        logger.info(`Campaign ${campaignId} failed DAO vote (${approvalRate.toFixed(1)}%) - moved to rejected list`);
+      }
+    }
+  }
+
+  /**
+   * Lấy danh sách campaigns đã được DAO approve (cho admin)
+   */
+  async getDAOApprovedCampaigns() {
+    const campaigns = await Campaign.findAll({
+      where: {
+        dao_approval_status: 'dao_approved',
+        approval_status: 'pending' // Chưa được admin xử lý
+      },
+      include: [
+        {
+          model: Charity,
+          as: 'charity',
+          attributes: ['charity_id', 'name'],
+        }
+      ],
+      order: [['dao_approved_at', 'ASC']],
+    });
+
+    // Lấy votes cho mỗi campaign
+    const campaignsWithVotes = await Promise.all(
+      campaigns.map(async (campaign) => {
+        const votes = await CampaignVote.findAll({
+          where: { campaign_id: campaign.campaign_id },
+          include: [
+            {
+              model: User,
+              as: 'voter',
+              attributes: ['full_name'],
+            }
+          ]
+        });
+
+        return {
+          ...campaign.toJSON(),
+          dao_votes: votes
+        };
+      })
+    );
+
+    return campaignsWithVotes;
+  }
+
+  /**
+   * Lấy danh sách campaigns bị DAO reject
+   */
+  async getDAORejectedCampaigns() {
+    const campaigns = await Campaign.findAll({
+      where: {
+        dao_approval_status: 'dao_rejected'
+      },
+      include: [
+        {
+          model: Charity,
+          as: 'charity',
+          attributes: ['charity_id', 'name'],
+        }
+      ],
+      order: [['dao_rejected_at', 'DESC']],
+    });
+
+    // Lấy votes cho mỗi campaign
+    const campaignsWithVotes = await Promise.all(
+      campaigns.map(async (campaign) => {
+        const votes = await CampaignVote.findAll({
+          where: { campaign_id: campaign.campaign_id },
+          include: [
+            {
+              model: User,
+              as: 'voter',
+              attributes: ['full_name'],
+            }
+          ]
+        });
+
+        return {
+          ...campaign.toJSON(),
+          dao_votes: votes
+        };
+      })
+    );
+
+    return campaignsWithVotes;
+  }
+
+  /**
+   * Lấy thống kê DAO
+   */
+  async getDAOStats() {
+    const [
+      totalDAOMembers,
+      pendingCampaigns,
+      daoApprovedCampaigns,
+      daoRejectedCampaigns,
+      totalVotes
+    ] = await Promise.all([
+      User.count({ where: { role: ROLES.DAO_MEMBER, status: 'active' } }),
+      Campaign.count({ where: { approval_status: 'pending', dao_approval_status: null } }),
+      Campaign.count({ where: { dao_approval_status: 'dao_approved' } }),
+      Campaign.count({ where: { dao_approval_status: 'dao_rejected' } }),
+      CampaignVote.count()
+    ]);
+
+    return {
+      total_dao_members: totalDAOMembers,
+      pending_campaigns: pendingCampaigns,
+      dao_approved_campaigns: daoApprovedCampaigns,
+      dao_rejected_campaigns: daoRejectedCampaigns,
+      total_votes_cast: totalVotes,
+    };
+  }
+
+  /**
+   * Lấy lịch sử vote của user
+   */
+  async getMyVotes(userId, query = {}) {
+    const { page = 1, limit = 10 } = query;
+    const offset = (page - 1) * limit;
+
+    const votes = await CampaignVote.findAndCountAll({
+      where: { voter_id: userId },
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          attributes: ['campaign_id', 'title', 'dao_approval_status', 'dao_approved_at'],
+          include: [
+            {
+              model: Charity,
+              as: 'charity',
+              attributes: ['charity_id', 'name'],
+            }
+          ]
+        }
+      ],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['created_at', 'DESC']],
+    });
+
+    return {
+      votes: votes.rows.map(vote => ({
+        vote_id: vote.vote_id,
+        campaign_id: vote.campaign_id,
+        vote: vote.vote_decision,
+        reason: vote.vote_reason,
+        created_at: vote.created_at,
+        campaign: vote.campaign
+      })),
+      pagination: {
+        total: votes.count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(votes.count / limit),
+      },
+    };
+  }
+
+  /**
+   * Lấy thống kê vote của user
+   */
+  async getMyVoteStatistics(userId) {
+    const votes = await CampaignVote.findAll({
+      where: { voter_id: userId }
+    });
+
+    const totalVotes = votes.length;
+    const approveVotes = votes.filter(v => v.vote_decision === 'approve').length;
+    const rejectVotes = votes.filter(v => v.vote_decision === 'reject').length;
+    const approvalRate = totalVotes > 0 ? (approveVotes / totalVotes) * 100 : 0;
+
+    return {
+      totalVotes,
+      approveVotes,
+      rejectVotes,
+      approvalRate: approvalRate.toFixed(1)
+    };
+  }
+}
+
+module.exports = new DAOService();

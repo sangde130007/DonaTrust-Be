@@ -16,7 +16,7 @@ const createSampleData = async () => {
 				full_name: 'Admin DonaTrust',
 				email: 'admin@donatrust.com',
 				phone: '0900000001',
-				password: adminPassword	,
+				password: adminPassword,
 				role: ROLES.ADMIN,
 				email_verified: true,
 				status: 'active',

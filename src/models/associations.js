@@ -5,6 +5,7 @@ const Donation = require('./Donation');
 const FinancialReport = require('./FinancialReport');
 const UserSocialLink = require('./UserSocialLink');
 const Vote = require('./Vote');
+const CampaignVote = require('./CampaignVote');
 const Feedback = require('./Feedback');
 const Notification = require('./Notification');
 const News = require('./News');
@@ -14,6 +15,7 @@ const DaoApplication = require('./DaoApplication');
 User.hasOne(Charity, { foreignKey: 'user_id', as: 'charity' });
 User.hasMany(Donation, { foreignKey: 'user_id', as: 'donations' });
 User.hasMany(Vote, { foreignKey: 'user_id', as: 'votes' });
+User.hasMany(CampaignVote, { foreignKey: 'voter_id', as: 'campaign_votes' });
 User.hasMany(Feedback, { foreignKey: 'user_id', as: 'feedbacks' });
 User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
 User.hasOne(UserSocialLink, { foreignKey: 'user_id', as: 'social_links' });
@@ -29,6 +31,7 @@ Charity.hasMany(FinancialReport, { foreignKey: 'charity_id', as: 'financial_repo
 Campaign.belongsTo(Charity, { foreignKey: 'charity_id', as: 'charity' });
 Campaign.hasMany(Donation, { foreignKey: 'campaign_id', as: 'donations' });
 Campaign.hasMany(Vote, { foreignKey: 'campaign_id', as: 'votes' });
+Campaign.hasMany(CampaignVote, { foreignKey: 'campaign_id', as: 'campaign_votes' });
 Campaign.hasMany(Feedback, { foreignKey: 'campaign_id', as: 'feedbacks' });
 Campaign.hasMany(FinancialReport, { foreignKey: 'campaign_id', as: 'financial_reports' });
 
@@ -46,6 +49,10 @@ UserSocialLink.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 // Vote associations
 Vote.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 Vote.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
+// CampaignVote associations
+CampaignVote.belongsTo(User, { foreignKey: 'voter_id', as: 'voter' });
+CampaignVote.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
 // Feedback associations
 Feedback.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -68,6 +75,7 @@ module.exports = {
 	FinancialReport,
 	UserSocialLink,
 	Vote,
+	CampaignVote,
 	Feedback,
 	Notification,
 	News,

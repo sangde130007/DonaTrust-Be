@@ -609,6 +609,52 @@ class AdminService {
 			pendingApprovals: pendingCharities + pendingCampaigns,
 		};
 	}
+
+	/**
+ * Lấy campaigns đã được DAO approve
+ */
+	async getDAOApprovedCampaigns() {
+		return await Campaign.findAll({
+			where: {
+				dao_approval_status: 'dao_approved',
+				approval_status: 'pending'
+			},
+			include: [
+				{
+					model: Charity,
+					as: 'charity',
+					attributes: ['charity_id', 'name'],
+				}
+			],
+			order: [['dao_approved_at', 'ASC']],
+		});
+	}
+
+	/**
+ * Admin phê duyệt campaign đã được DAO approve
+ */
+	async approveDAOApprovedCampaign(campaignId, adminId) {
+		const campaign = await Campaign.findOne({
+			where: {
+				campaign_id: campaignId,
+				dao_approval_status: 'dao_approved',
+				approval_status: 'pending'
+			}
+		});
+
+		if (!campaign) {
+			throw new AppError('Không tìm thấy chiến dịch hoặc chưa được DAO phê duyệt', 404);
+		}
+
+		await campaign.update({
+			approval_status: 'approved',
+			approved_at: new Date(),
+			approved_by: adminId,
+			status: 'active'
+		});
+
+		return campaign;
+	}
 }
 
 module.exports = new AdminService();

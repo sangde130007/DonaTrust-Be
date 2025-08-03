@@ -45,6 +45,9 @@ const News = sequelize.define(
 		},
 		image_url: {
 			type: DataTypes.STRING,
+			validate: {
+				isUrl: true,
+			},
 		},
 		tags: {
 			type: DataTypes.ARRAY(DataTypes.STRING),
