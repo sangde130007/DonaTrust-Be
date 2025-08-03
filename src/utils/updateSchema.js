@@ -27,7 +27,12 @@ async function updateDatabaseSchema() {
 			ADD COLUMN IF NOT EXISTS "approved_at" TIMESTAMP,
 			ADD COLUMN IF NOT EXISTS "approved_by" VARCHAR(255),
 			ADD COLUMN IF NOT EXISTS "rejected_at" TIMESTAMP,
-			ADD COLUMN IF NOT EXISTS "rejected_by" VARCHAR(255);
+			ADD COLUMN IF NOT EXISTS "rejected_by" VARCHAR(255),
+			ADD COLUMN IF NOT EXISTS "dao_approval_status" "enum_Campaigns_dao_approval_status",
+ADD COLUMN IF NOT EXISTS "dao_approved_at" TIMESTAMP,
+ADD COLUMN IF NOT EXISTS "dao_rejected_at" TIMESTAMP,
+ADD COLUMN IF NOT EXISTS "dao_approval_rate" DECIMAL(5,2);
+			
 		`);
 		logger.info('✓ Đã cập nhật Campaigns table');
 
