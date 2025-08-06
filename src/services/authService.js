@@ -22,8 +22,8 @@ const isEmailConfigValid = () => {
 	return (
 		process.env.EMAIL_USER &&
 		process.env.EMAIL_PASS &&
-		process.env.EMAIL_USER !== 'your_gmail@gmail.com' &&
-		process.env.EMAIL_PASS !== 'your_gmail_app_password'
+		process.env.EMAIL_USER !== 'taiinu0004@gmail.com' &&
+		process.env.EMAIL_PASS !== 'mpox qain gzih hqhu'
 	);
 };
 
