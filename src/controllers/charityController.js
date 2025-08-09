@@ -4,7 +4,7 @@ const campaignService = require('../services/campaignService');
 const financialReportService = require('../services/financialReportService');
 const validate = require('../middleware/validationMiddleware');
 const { requireCharityOwnership, requireCharity } = require('../middleware/roleMiddleware');
-
+const { uploadQrImage, uploadDocument, handleMulterError } = require('../middleware/uploadMiddleware');
 exports.create = [
 	check('user_id').notEmpty().withMessage('ID người dùng là bắt buộc'),
 	check('name').notEmpty().withMessage('Tên tổ chức là bắt buộc'),
@@ -276,7 +276,7 @@ exports.getCharityStats = [
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
@@ -293,44 +293,62 @@ exports.getCharityStats = [
  *               description:
  *                 type: string
  *                 example: "Mô tả chi tiết về chiến dịch"
+ *               detailed_description:
+ *                 type: string
+ *                 example: "Câu chuyện đầy đủ..."
  *               goal_amount:
  *                 type: number
  *                 example: 100000000
  *               start_date:
  *                 type: string
  *                 format: date
- *                 example: "2024-01-01"
+ *                 example: "2025-08-10"
  *               end_date:
  *                 type: string
  *                 format: date
- *                 example: "2024-12-31"
+ *                 example: "2025-12-31"
  *               category:
  *                 type: string
  *                 example: "education"
+ *               qr_image:
+ *                 type: string
+ *                 format: binary
+ *                 description: Ảnh QR (tùy chọn). Nếu truyền file này, server sẽ lưu và set qr_code_url.
+ *               qr_code_url:
+ *                 type: string
+ *                 example: "https://example.com/qr.png"
+ *                 description: Tùy chọn. Nếu không upload file, có thể truyền URL ảnh QR (không khuyến nghị do bị chặn hotlink).
  *     responses:
  *       201:
  *         description: Tạo chiến dịch thành công
  */
+// const upload = require('../middleware/upload');  // cũ
+
 exports.createCampaign = [
-	requireCharityOwnership,
-	check('title').isLength({ min: 5, max: 200 }).withMessage('Tiêu đề phải từ 5-200 ký tự'),
-	check('description').notEmpty().withMessage('Mô tả không được để trống'),
-	check('goal_amount').isFloat({ min: 100000 }).withMessage('Số tiền mục tiêu tối thiểu 100,000 VND'),
-	check('start_date').isISO8601().withMessage('Ngày bắt đầu không hợp lệ'),
-	check('end_date').isISO8601().withMessage('Ngày kết thúc không hợp lệ'),
-	check('category').notEmpty().withMessage('Danh mục không được để trống'),
-	validate,
-	async (req, res, next) => {
-		try {
-			const campaign = await campaignService.createCampaign(req.user.user_id, req.body);
-			res.status(201).json({
-				message: 'Tạo chiến dịch thành công, đang chờ duyệt',
-				campaign,
-			});
-		} catch (error) {
-			next(error);
-		}
-	},
+  requireCharityOwnership,
+  uploadQrImage,            // ⬅️ nhận file 'qr_image'
+  handleMulterError,        // ⬅️ (khuyến nghị) bắt lỗi upload sớm
+
+  check('title').isLength({ min: 5, max: 200 }).withMessage('Tiêu đề phải từ 5-200 ký tự'),
+  check('description').notEmpty().withMessage('Mô tả không được để trống'),
+  check('goal_amount').isFloat({ min: 100000 }).withMessage('Số tiền mục tiêu tối thiểu 100,000 VND'),
+  check('start_date').isISO8601().withMessage('Ngày bắt đầu không hợp lệ'),
+  check('end_date').isISO8601().withMessage('Ngày kết thúc không hợp lệ'),
+  check('category').notEmpty().withMessage('Danh mục không được để trống'),
+  validate,
+
+  async (req, res, next) => {
+    try {
+      const campaign = await campaignService.createCampaign(
+        req.user.user_id,
+        req.body,
+        req.file               
+      );
+      res.status(201).json({ message: 'Tạo chiến dịch thành công, đang chờ duyệt', campaign });
+    } catch (error) {
+      next(error);
+    }
+  },
 ];
 
 /**
@@ -1026,14 +1044,17 @@ exports.getCharityById = async (req, res, next) => {
  *       404:
  *         description: Không tìm thấy tổ chức từ thiện
  */
+
 exports.uploadDocument = [
-	requireCharityOwnership,
-	async (req, res, next) => {
-		try {
-			const result = await charityService.uploadDocument(req.user.user_id, req.file, req.body);
-			res.json(result);
-		} catch (error) {
-			next(error);
-		}
-	},
+  requireCharityOwnership,
+  uploadDocument,              // ✅ middleware sẵn có từ upload.js
+  handleMulterError,           // ✅ nên kẹp để bắt lỗi Multer gọn
+  async (req, res, next) => {
+    try {
+      const result = await charityService.uploadDocument(req.user.user_id, req.file, req.body);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
 ];

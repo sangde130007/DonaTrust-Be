@@ -126,6 +126,11 @@ const Campaign = sequelize.define(
 			type: DataTypes.DATE,
 			defaultValue: DataTypes.NOW,
 		},
+		qr_code_url: {
+			type: DataTypes.STRING,
+			allowNull: true,
+			comment: 'Đường dẫn ảnh mã QR thanh toán',
+		},
 	},
 	{
 		tableName: 'Campaigns',

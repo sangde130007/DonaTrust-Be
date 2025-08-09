@@ -29,20 +29,41 @@ async function updateDatabaseSchema() {
 			ADD COLUMN IF NOT EXISTS "rejected_at" TIMESTAMP,
 			ADD COLUMN IF NOT EXISTS "rejected_by" VARCHAR(255),
 			ADD COLUMN IF NOT EXISTS "dao_approval_status" "enum_Campaigns_dao_approval_status",
-ADD COLUMN IF NOT EXISTS "dao_approved_at" TIMESTAMP,
-ADD COLUMN IF NOT EXISTS "dao_rejected_at" TIMESTAMP,
-ADD COLUMN IF NOT EXISTS "dao_approval_rate" DECIMAL(5,2);
-			
+			ADD COLUMN IF NOT EXISTS "dao_approved_at" TIMESTAMP,
+			ADD COLUMN IF NOT EXISTS "dao_rejected_at" TIMESTAMP,
+			ADD COLUMN IF NOT EXISTS "dao_approval_rate" DECIMAL(5,2),
+  			ADD COLUMN IF NOT EXISTS "qr_code_url" VARCHAR(500);
+
 		`);
 		logger.info('✓ Đã cập nhật Campaigns table');
 
 		// Add new fields to Charities table
-		await sequelize.query(`
-			ALTER TABLE "Charities" 
-			ADD COLUMN IF NOT EXISTS "verified_at" TIMESTAMP,
-			ADD COLUMN IF NOT EXISTS "verified_by" VARCHAR(255),
-			ADD COLUMN IF NOT EXISTS "rejection_reason" TEXT;
-		`);
+await sequelize.query(`
+	ALTER TABLE "Charities" 
+	ADD COLUMN IF NOT EXISTS "verified_at" TIMESTAMP,
+	ADD COLUMN IF NOT EXISTS "verified_by" VARCHAR(255),
+	ADD COLUMN IF NOT EXISTS "rejection_reason" TEXT,
+	ALTER COLUMN "user_id" TYPE UUID USING "user_id"::uuid;
+`);
+
+await sequelize.query(`
+	DO $$
+	BEGIN
+		IF NOT EXISTS (
+			SELECT 1
+			FROM information_schema.table_constraints
+			WHERE constraint_name = 'fk_charities_user_id'
+		) THEN
+			ALTER TABLE "Charities"
+			ADD CONSTRAINT fk_charities_user_id
+			FOREIGN KEY ("user_id")
+			REFERENCES "Users"("user_id")
+			ON DELETE CASCADE
+			ON UPDATE CASCADE;
+		END IF;
+	END$$;
+`);
+
 		logger.info('✓ Đã cập nhật Charities table');
 
 		// Create News table if not exists

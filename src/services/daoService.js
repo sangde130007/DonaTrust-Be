@@ -96,26 +96,28 @@ class DAOService {
    * Lấy chi tiết campaign với vote info
    */
   async getCampaignDetail(campaignId, userId) {
-    const campaign = await Campaign.findOne({
-      where: {
-        campaign_id: campaignId,
-        approval_status: 'pending'
-      },
+   const campaign = await Campaign.findOne({
+  where: {
+    campaign_id: campaignId,
+    approval_status: 'pending'
+  },
+  attributes: { exclude: [] }, // <-- đảm bảo không bị giới hạn trường
+  include: [
+    {
+      model: Charity,
+      as: 'charity',
+      attributes: ['charity_id', 'name', 'verification_status', 'email', 'phone'],
       include: [
         {
-          model: Charity,
-          as: 'charity',
-          attributes: ['charity_id', 'name', 'verification_status', 'email', 'phone'],
-          include: [
-            {
-              model: User,
-              as: 'user',
-              attributes: ['user_id', 'full_name', 'email'],
-            },
-          ],
-        }
+          model: User,
+          as: 'user',
+          attributes: ['user_id', 'full_name', 'email'],
+        },
       ],
-    });
+    }
+  ],
+});
+
 
     if (!campaign) {
       throw new AppError('Không tìm thấy chiến dịch hoặc chiến dịch đã được xử lý', 404);

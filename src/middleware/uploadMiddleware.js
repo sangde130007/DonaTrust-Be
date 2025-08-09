@@ -210,6 +210,7 @@ const uploadCampaignSingleImage = createCampaignUpload().single('image');
 const uploadDocument = createDocumentUpload().single('document');
 const uploadCertificates = createCertificateUpload().array('certificates', 5); // Up to 5 certificates
 const uploadReport = createReportUpload().single('report');
+const uploadQrImage = createCampaignUpload().single('qr_image');
 
 // Error handling middleware for multer
 const handleMulterError = (err, req, res, next) => {
@@ -226,12 +227,12 @@ const handleMulterError = (err, req, res, next) => {
 				message: 'Quá nhiều file',
 			});
 		}
-		if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-			return res.status(400).json({
-				status: 'error',
-				message: 'Tên field không đúng',
-			});
-		}
+		 if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(400).json({
+      status: 'error',
+      message: `Tên field không đúng: ${err.field || 'unknown'}`,
+    });
+  }
 		return res.status(400).json({
 			status: 'error',
 			message: 'Lỗi upload file',
@@ -250,6 +251,7 @@ module.exports = {
 	uploadAvatar,
 	uploadCampaignImages,
 	uploadCampaignSingleImage,
+	  uploadQrImage,               
 	uploadDocument,
 	uploadCertificates,
 	uploadReport,

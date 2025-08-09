@@ -314,6 +314,7 @@ sequelize
 		logger.error('Lỗi khởi động server:', err);
 		process.exit(1);
 	});
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

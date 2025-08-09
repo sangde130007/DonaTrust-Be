@@ -12,20 +12,14 @@ const { uploadDocument } = require('../middleware/uploadMiddleware');
  */
 
 // Public routes - không cần đăng nhập
+// Public routes - không cần đăng nhập
 router.get('/', charityController.getAllCharities);
-router.get('/:id', charityController.getCharityById);
+
+// 👇 Chuyển /:id xuống dưới cùng
+// router.get('/:id', charityController.getCharityById);
 
 // Protected routes - cần đăng nhập
 router.use(authMiddleware);
-
-// Charity management
-router.post('/register', charityController.registerCharity);
-router.get('/my-charity', charityController.getMyCharity);
-router.put('/my-charity', charityController.updateMyCharity);
-router.get('/stats', charityController.getCharityStats);
-
-// Document upload
-router.post('/upload-document', uploadDocument, charityController.uploadDocument);
 
 // Campaign management
 router.post('/campaigns', charityController.createCampaign);
@@ -45,5 +39,18 @@ router.delete('/financial-reports/:id', charityController.deleteMyFinancialRepor
 router.post('/financial-reports/generate', charityController.generateAutoReport);
 router.post('/financial-reports/:id/submit', charityController.submitFinancialReport);
 router.get('/financial-overview', charityController.getFinancialOverview);
+
+// Document upload
+router.post('/upload-document', uploadDocument, charityController.uploadDocument);
+
+// Charity management
+router.post('/register', charityController.registerCharity);
+router.get('/my-charity', charityController.getMyCharity);
+router.put('/my-charity', charityController.updateMyCharity);
+router.get('/stats', charityController.getCharityStats);
+
+// ✅ Cuối cùng mới get by ID để tránh bị bắt nhầm
+router.get('/:id', charityController.getCharityById);
+
 
 module.exports = router;

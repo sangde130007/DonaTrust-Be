@@ -10,7 +10,7 @@ const Charity = sequelize.define(
 			primaryKey: true,
 		},
 		user_id: {
-			type: DataTypes.STRING,
+			type: DataTypes.UUID,
 			allowNull: false,
 			unique: true,
 		},
