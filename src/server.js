@@ -315,7 +315,7 @@ sequelize
 		process.exit(1);
 	});
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
+	
 // Graceful shutdown
 process.on('SIGTERM', () => {
 	logger.info('Đang tắt server...');
