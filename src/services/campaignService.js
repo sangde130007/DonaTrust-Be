@@ -8,8 +8,8 @@ const { Op } = require('sequelize');
 const logger = require('../utils/logger');
 
 /**
- * Tạo campaign mới theo dạng payload (khớp controller hiện tại)
- * payload mong đợi: {
+ * Tạo campaign mới theo dạng payload (khớp controller khác nếu dùng)
+ * payload: {
  *   charity_id, title, description, detailed_description, goal_amount,
  *   start_date, end_date, category, location,
  *   image_url, gallery_images (array), qr_code_url
@@ -43,7 +43,7 @@ async function create(payload) {
   if (startDate < today) throw new AppError('Ngày bắt đầu không thể là quá khứ', 400);
   if (endDate <= startDate) throw new AppError('Ngày kết thúc phải sau ngày bắt đầu', 400);
 
-  // Đảm bảo charity tồn tại & (tuỳ chính sách) đã xác minh
+  // Đảm bảo charity tồn tại & đã xác minh (nếu áp dụng)
   const charity = await Charity.findOne({ where: { charity_id } });
   if (!charity) throw new AppError('Không tìm thấy tổ chức từ thiện', 404);
   if (charity.verification_status && charity.verification_status !== 'verified') {
@@ -63,11 +63,10 @@ async function create(payload) {
     image_url: image_url || null,
     gallery_images: Array.isArray(gallery_images) ? gallery_images : [],
     qr_code_url: qr_code_url || null,
-    status: 'pending',          // chỉnh theo rule của bạn
-    approval_status: 'pending', // chỉnh theo rule của bạn
+    status: 'pending',
+    approval_status: 'pending',
   });
 
-  // (tuỳ chọn) cập nhật đếm
   if (typeof charity.active_campaigns === 'number') {
     await charity.update({ active_campaigns: charity.active_campaigns + 1 });
   }
@@ -76,8 +75,7 @@ async function create(payload) {
 }
 
 /**
- * (Giữ hàm cũ) Tạo campaign theo userId + data + file QR
- * Dùng ở nơi khác trong app nếu còn
+ * Tạo campaign theo userId + data + file QR (đang dùng ở controller tạo mới)
  */
 exports.createCampaign = async (userId, campaignData, file) => {
   const charity = await Charity.findOne({ where: { user_id: userId } });
@@ -92,7 +90,6 @@ exports.createCampaign = async (userId, campaignData, file) => {
   if (startDate < today) throw new AppError('Ngày bắt đầu không thể là quá khứ', 400);
   if (endDate <= startDate) throw new AppError('Ngày kết thúc phải sau ngày bắt đầu', 400);
 
-  // Dùng tham số file (QR) nếu có
   const qr_code_url = file
     ? `/uploads/campaigns/${file.filename}`
     : (campaignData.qr_code_url?.trim() || null);
@@ -105,22 +102,22 @@ exports.createCampaign = async (userId, campaignData, file) => {
     start_date: campaignData.start_date,
     end_date: campaignData.end_date,
     category: campaignData.category,
+    location: campaignData.location || null,
     qr_code_url,
     charity_id: charity.charity_id,
     status: 'pending',
     approval_status: 'pending',
   });
 
-  await charity.update({
-    active_campaigns: charity.active_campaigns + 1,
-  });
+  if (typeof charity.active_campaigns === 'number') {
+    await charity.update({
+      active_campaigns: charity.active_campaigns + 1,
+    });
+  }
 
   return campaign;
 };
 
-/**
- * Lấy tất cả campaigns của charity (dashboard)
- */
 exports.getMyCampaigns = async (userId, filters = {}) => {
   const charity = await Charity.findOne({ where: { user_id: userId } });
   if (!charity) throw new AppError('Bạn chưa đăng ký tổ chức từ thiện', 404);
@@ -161,9 +158,6 @@ exports.getMyCampaigns = async (userId, filters = {}) => {
   };
 };
 
-/**
- * Lấy campaign theo ID (của charity)
- */
 exports.getMyCampaignById = async (userId, campaignId) => {
   const charity = await Charity.findOne({ where: { user_id: userId } });
   if (!charity) throw new AppError('Bạn chưa đăng ký tổ chức từ thiện', 404);
@@ -184,9 +178,11 @@ exports.getMyCampaignById = async (userId, campaignId) => {
 };
 
 /**
- * Cập nhật campaign (của charity)
+ * Cập nhật campaign (phòng thủ: updateData = {})
+ * - Validate ngày khi có truyền
+ * - Hợp nhất gallery từ _keep_gallery + _new_gallery
  */
-exports.updateMyCampaign = async (userId, campaignId, updateData) => {
+exports.updateMyCampaign = async (userId, campaignId, updateData = {}) => {
   const charity = await Charity.findOne({ where: { user_id: userId } });
   if (!charity) throw new AppError('Bạn chưa đăng ký tổ chức từ thiện', 404);
 
@@ -199,10 +195,15 @@ exports.updateMyCampaign = async (userId, campaignId, updateData) => {
     throw new AppError('Không thể sửa chiến dịch đang hoạt động hoặc đã hoàn thành', 400);
   }
 
+  if (updateData.goal_amount != null) {
+    updateData.goal_amount = Number(updateData.goal_amount);
+  }
+
   if (updateData.start_date || updateData.end_date) {
     const startDate = new Date(updateData.start_date || campaign.start_date);
     const endDate = new Date(updateData.end_date || campaign.end_date);
     const today = new Date();
+
     if (updateData.start_date && startDate < today) {
       throw new AppError('Ngày bắt đầu không thể là quá khứ', 400);
     }
@@ -211,14 +212,22 @@ exports.updateMyCampaign = async (userId, campaignId, updateData) => {
     }
   }
 
+  // Hợp nhất gallery nếu có chỉ thị tạm
+  if (updateData._keep_gallery || updateData._new_gallery) {
+    const current = Array.isArray(campaign.gallery_images) ? campaign.gallery_images : [];
+    const keep = Array.isArray(updateData._keep_gallery) ? updateData._keep_gallery : [];
+    const add = Array.isArray(updateData._new_gallery) ? updateData._new_gallery : [];
+    updateData.gallery_images = [...keep, ...add];
+
+    delete updateData._keep_gallery;
+    delete updateData._new_gallery;
+  }
+
   await campaign.update(updateData);
   logger.info(`Campaign updated: ${campaign.title} by charity ${charity.name}`);
   return campaign;
 };
 
-/**
- * Xoá campaign (của charity)
- */
 exports.deleteMyCampaign = async (userId, campaignId) => {
   const charity = await Charity.findOne({ where: { user_id: userId } });
   if (!charity) throw new AppError('Bạn chưa đăng ký tổ chức từ thiện', 404);
@@ -243,9 +252,6 @@ exports.deleteMyCampaign = async (userId, campaignId) => {
   return { message: 'Đã xóa chiến dịch thành công' };
 };
 
-/**
- * Thêm progress update (của charity)
- */
 exports.addProgressUpdate = async (userId, campaignId, updateData) => {
   const charity = await Charity.findOne({ where: { user_id: userId } });
   if (!charity) throw new AppError('Bạn chưa đăng ký tổ chức từ thiện', 404);
@@ -272,9 +278,6 @@ exports.addProgressUpdate = async (userId, campaignId, updateData) => {
   return campaign;
 };
 
-/**
- * Lấy thống kê campaign (của charity)
- */
 exports.getCampaignStats = async (userId, campaignId) => {
   const charity = await Charity.findOne({ where: { user_id: userId } });
   if (!charity) throw new AppError('Bạn chưa đăng ký tổ chức từ thiện', 404);
@@ -295,7 +298,7 @@ exports.getCampaignStats = async (userId, campaignId) => {
     total_donations: donations.length,
     total_amount,
     average_donation: donations.length > 0 ? total_amount / donations.length : 0,
-    goal_percentage: ((parseFloat(campaign.current_amount) / parseFloat(campaign.goal_amount)) * 100).toFixed(2),
+    goal_percentage: ((parseFloat(campaign.current_amount || 0) / parseFloat(campaign.goal_amount || 1)) * 100).toFixed(2),
     recent_donations: donations.slice(0, 10),
     days_remaining: Math.max(0, Math.ceil((new Date(campaign.end_date) - new Date()) / (1000 * 60 * 60 * 24))),
   };
@@ -303,9 +306,6 @@ exports.getCampaignStats = async (userId, campaignId) => {
   return stats;
 };
 
-/**
- * Lấy tất cả campaigns (public)
- */
 exports.getAllCampaigns = async (filters = {}) => {
   const {
     page = 1,
@@ -327,7 +327,6 @@ exports.getAllCampaigns = async (filters = {}) => {
   if (charity_id) whereClause.charity_id = charity_id;
 
   if (featured !== undefined) {
-    // Nếu FE gửi boolean/tham số string, chuyển giúp:
     if (typeof featured === 'string') {
       whereClause.featured = featured === 'true';
     } else {
@@ -366,9 +365,6 @@ exports.getAllCampaigns = async (filters = {}) => {
   };
 };
 
-/**
- * Lấy campaign theo ID (public)
- */
 exports.getCampaignById = async (campaignId) => {
   const campaign = await Campaign.findOne({
     where: { campaign_id: campaignId, approval_status: 'approved' },
@@ -384,13 +380,10 @@ exports.getCampaignById = async (campaignId) => {
 
   if (!campaign) throw new AppError('Không tìm thấy chiến dịch', 404);
 
-  await campaign.update({ views: campaign.views + 1 });
+  await campaign.update({ views: (campaign.views || 0) + 1 });
   return campaign;
 };
 
-/**
- * Upload ảnh đơn cho campaign
- */
 exports.uploadImage = async (campaignId, file, userId) => {
   if (!file) throw new AppError('Không có file được upload', 400);
 
@@ -413,12 +406,7 @@ exports.uploadImage = async (campaignId, file, userId) => {
   };
 };
 
-/**
- * Upload nhiều ảnh cho campaign (gallery)
- * — dùng đúng cột gallery_images (JSON/JSONB)
- */
 exports.uploadImages = async (campaignId, files, userId) => {
-  // files có thể là array (upload.any/array) hoặc object (fields)
   const list = Array.isArray(files) ? files : (files?.images || []);
   if (!list || list.length === 0) throw new AppError('Không có file được upload', 400);
 
@@ -444,7 +432,5 @@ exports.uploadImages = async (campaignId, files, userId) => {
   };
 };
 
-/**
- * Export thêm hàm create để controller dùng
- */
+// Export thêm hàm create cho nơi khác dùng
 exports.create = create;
