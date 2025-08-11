@@ -1,12 +1,12 @@
 const { Client } = require('pg');
-
+require('dotenv').config();
 // Database connection configuration
 const dbConfig = {
-	host: 'localhost',
+	host: process.env.DB_HOST || 'localhost',
 	port: 5432,
 	database: 'donastrust', // Change this to your database name
-	user: 'postgres', // Change this to your database user
-	password: '123', // Change this to your database password
+	user: process.env.DB_USER || 'postgres', // Change this to your database user
+	password: process.env.DB_PASSWORD || 'postgres', // Change this to your database password
 };
 
 async function updateSchema() {
@@ -34,12 +34,15 @@ async function updateSchema() {
 		console.log('✅ Users table updated');
 
 		console.log('📝 Adding new fields to Campaigns table...');
+		// Update Campaigns table
+		console.log('📝 Updating Campaigns table...');
 		await client.query(`
 			ALTER TABLE "Campaigns" 
 			ADD COLUMN IF NOT EXISTS "approved_at" TIMESTAMP,
 			ADD COLUMN IF NOT EXISTS "approved_by" VARCHAR(255),
 			ADD COLUMN IF NOT EXISTS "rejected_at" TIMESTAMP,
-			ADD COLUMN IF NOT EXISTS "rejected_by" VARCHAR(255);
+			ADD COLUMN IF NOT EXISTS "rejected_by" VARCHAR(255),
+			ADD COLUMN IF NOT EXISTS "qr_code_url" VARCHAR(255); -- Thêm cột mới
 		`);
 		console.log('✅ Campaigns table updated');
 

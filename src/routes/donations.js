@@ -1,12 +1,31 @@
 const express = require('express');
 const router = express.Router();
-const donationController = require('../controllers/donationController');
-const authMiddleware = require('../middleware/authMiddleware');
+const donationService = require('../services/donationService');
 
-router.post('/', authMiddleware, donationController.create);
-router.get('/', authMiddleware, donationController.getAll);
-router.get('/:id', authMiddleware, donationController.getById);
-router.put('/:id', authMiddleware, donationController.update);
-router.delete('/:id', authMiddleware, donationController.delete);
+router.post('/', async (req, res, next) => {
+  try {
+    const donation = await donationService.createDonation(req.body);
+    res.status(201).json(donation);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/webhook', async (req, res, next) => {
+  try {
+    const result = await donationService.handlePayOSWebhook(req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+    
+router.get('/history', async (req, res, next) => {
+  try {
+    await donationService.getDonationHistory(req, res);
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router;
