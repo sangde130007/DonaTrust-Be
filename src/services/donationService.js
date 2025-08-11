@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-// src/services/donationService.js
-=======
 const PayOS = require('@payos/node');
->>>>>>> 3d706da (payment)
 const Donation = require('../models/Donation');
 const Campaign = require('../models/Campaign');
 const { AppError } = require('../utils/errorHandler');
@@ -12,58 +8,6 @@ const payosConfig = require('../config/payos');
 const QRCode = require('qrcode');
 const sequelize = require('../config/database');
 
-<<<<<<< HEAD
-// Lấy sequelize instance từ model (không cần ../models/index.js)
-const sequelize = Donation.sequelize;
-
-/**
- * Tạo donation + cập nhật campaign + auto-feature khi đạt 50%
- */
-exports.create = async (data) => {
-  // data cần có: campaign_id, user_id (hoặc donor info), amount, note...
-  if (!data?.campaign_id) throw new AppError('Thiếu campaign_id', 400);
-  const amountNum = Number(data?.amount || 0);
-  if (!Number.isFinite(amountNum) || amountNum <= 0) {
-    throw new AppError('Số tiền không hợp lệ', 400);
-  }
-
-  return await sequelize.transaction(async (t) => {
-    // 1) Tạo donation
-    const donation = await Donation.create(
-      { ...data, amount: amountNum },
-      { transaction: t }
-    );
-
-    // 2) Tải campaign (FOR UPDATE)
-    const campaign = await Campaign.findOne({
-      where: { campaign_id: data.campaign_id },
-      transaction: t,
-      lock: t.LOCK.UPDATE
-    });
-
-    if (!campaign) throw new AppError('Không tìm thấy chiến dịch', 404);
-
-    const goal = Number(campaign.goal_amount || 0);
-    const current = Number(campaign.current_amount || 0);
-    const next = current + amountNum;
-
-    // 3) Cập nhật số tiền hiện tại
-    await campaign.update(
-      { current_amount: next },
-      { transaction: t }
-    );
-
-    // 4) Auto-feature nếu đạt >= 50% mục tiêu
-    if (goal > 0 && next >= goal * 0.5 && !campaign.featured) {
-      await campaign.update({ featured: true }, { transaction: t });
-    }
-
-    return {
-      donation,
-      campaign: await Campaign.findByPk(campaign.campaign_id, { transaction: t })
-    };
-  });
-=======
 const payos = new PayOS(payosConfig.clientId, payosConfig.apiKey, payosConfig.checksumKey);
 
 function createSignatureData(obj) {
@@ -209,7 +153,6 @@ exports.handlePayOSWebhook = async (webhookData) => {
   });
 
   return { message: 'Webhook processed successfully' };
->>>>>>> 3d706da (payment)
 };
 
 function truncateUtf8(str, maxLen) {
@@ -333,13 +276,6 @@ exports.getDonationHistory = async (req, res) => {
   const offset = (page - 1) * limit;
   const campaign_id = req.query.campaign_id;
 
-<<<<<<< HEAD
-exports.delete = async (id) => {
-  const donation = await Donation.findByPk(id);
-  if (!donation) throw new AppError('Không tìm thấy khoản quyên góp', 404);
-  await donation.destroy();
-};
-=======
   try {
     const whereClause = { status: 'completed' };
     if (campaign_id) {
@@ -375,4 +311,3 @@ exports.delete = async (id) => {
     throw new AppError('Không thể lấy lịch sử quyên góp', 500);
   }
 };
->>>>>>> 3d706da (payment)
