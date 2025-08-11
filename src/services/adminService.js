@@ -68,25 +68,44 @@ class AdminService {
 		return charity;
 	}
 
-	async verifyCharity(charityId, status, rejectionReason = null, adminId) {
-		const charity = await Charity.findByPk(charityId);
-		if (!charity) {
-			throw new AppError('Không tìm thấy tổ chức từ thiện', 404);
-		}
+// src/services/adminService.js
+async verifyCharity(charityId, payload) {
+  const { status, rejection_reason, admin_id } = payload || {};
 
-		if (charity.verification_status !== CHARITY_VERIFICATION_STATUS.PENDING) {
-			throw new AppError('Tổ chức từ thiện này đã được xử lý', 400);
-		}
+  if (!['verified', 'rejected'].includes(status)) {
+    throw new AppError('Trạng thái không hợp lệ', 400);
+  }
 
-		charity.verification_status = status;
-		charity.verified_at = status === CHARITY_VERIFICATION_STATUS.VERIFIED ? new Date() : null;
-		charity.verified_by = status === CHARITY_VERIFICATION_STATUS.VERIFIED ? adminId : null;
-		charity.rejection_reason = status === CHARITY_VERIFICATION_STATUS.REJECTED ? rejectionReason : null;
+  const charity = await Charity.findByPk(charityId);
+  if (!charity) throw new AppError('Không tìm thấy tổ chức từ thiện', 404);
 
-		await charity.save();
+  if (charity.verification_status !== CHARITY_VERIFICATION_STATUS.PENDING) {
+    throw new AppError('Tổ chức từ thiện này đã được xử lý', 400);
+  }
 
-		return charity;
-	}
+  if (status === 'verified') {
+    charity.verification_status = CHARITY_VERIFICATION_STATUS.VERIFIED; // 'verified'
+    charity.verified_at = new Date();
+    charity.verified_by = admin_id;
+    charity.rejection_reason = null;
+
+    // (tuỳ policy) nâng role owner thành charity
+    const owner = await User.findByPk(charity.user_id);
+    if (owner && owner.role !== ROLES.CHARITY) {
+      owner.role = ROLES.CHARITY;
+      await owner.save();
+    }
+  } else {
+    charity.verification_status = CHARITY_VERIFICATION_STATUS.REJECTED; // 'rejected'
+    charity.rejection_reason = rejection_reason || 'Không đạt yêu cầu';
+    charity.verified_at = null;
+    charity.verified_by = null;
+  }
+
+  await charity.save();
+  return charity;
+}
+
 
 	async getPendingCharities() {
 		return await Charity.findAll({

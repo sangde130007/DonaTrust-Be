@@ -127,7 +127,7 @@ exports.delete = async (req, res, next) => {
  *         description: Không có quyền truy cập
  */
 exports.registerCharity = [
-	requireCharity,
+	
 	check('name').isLength({ min: 2, max: 200 }).withMessage('Tên tổ chức phải từ 2-200 ký tự'),
 	check('description').notEmpty().withMessage('Mô tả không được để trống'),
 	check('mission').notEmpty().withMessage('Sứ mệnh không được để trống'),

@@ -105,28 +105,32 @@ class AdminController {
 	 *     security:
 	 *       - bearerAuth: []
 	 */
-	verifyCharity = [
-		check('status').isIn(['verified', 'rejected']).withMessage('Trạng thái phải là verified hoặc rejected'),
-		check('rejection_reason')
-			.optional()
-			.isLength({ min: 10 })
-			.withMessage('Lý do từ chối phải có ít nhất 10 ký tự'),
-		validate,
-		async (req, res, next) => {
-			try {
-				const { status, rejection_reason } = req.body;
-				const charity = await adminService.verifyCharity(
-					req.params.id,
-					status,
-					rejection_reason,
-					req.user.user_id
-				);
-				res.json(charity);
-			} catch (error) {
-				next(error);
-			}
-		},
-	];
+verifyCharity = [
+  check('status')
+    .isIn(['verified', 'rejected'])
+    .withMessage('Trạng thái phải là verified hoặc rejected'),
+  check('rejection_reason')
+    .optional()
+    .isLength({ min: 10 })
+    .withMessage('Lý do từ chối phải có ít nhất 10 ký tự'),
+  validate,
+  async (req, res, next) => {
+    try {
+      const { status, rejection_reason } = req.body;
+
+      const charity = await adminService.verifyCharity(req.params.id, {
+        status,
+        rejection_reason,
+        admin_id: req.user.user_id,
+      });
+
+      res.json(charity);
+    } catch (error) {
+      next(error);
+    }
+  },
+];
+
 
 	// ================================
 	// PROJECT APPROVAL
