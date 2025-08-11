@@ -219,7 +219,6 @@ const swaggerOptions = {
 const specs = swaggerJsdoc(swaggerOptions);
 
 // Middleware
-<<<<<<< HEAD
 app.use(
 	cors({
 		origin: '*', // Mở toàn bộ CORS
@@ -228,26 +227,6 @@ app.use(
 		credentials: true,
 	})
 );
-=======
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'https://donatrust.info.vn'
-    ];
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200, // <--- Add this line
-}));
->>>>>>> 6df7362 (fix cors)
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

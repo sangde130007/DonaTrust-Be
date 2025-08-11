@@ -3,7 +3,15 @@ const logger = require('./logger');
 
 async function updateDatabaseSchema() {
 	try {
+		
 		logger.info('Bắt đầu cập nhật schema database...');
+
+		await sequelize.query(`
+				ALTER TABLE "Donations"
+				ADD COLUMN IF NOT EXISTS "email" VARCHAR(255),
+				ADD COLUMN IF NOT EXISTS "full_name" VARCHAR(255);
+				`);
+			logger.info('✓ Đã cập nhật Donations table (email, full_name)');
 
 		// Add new fields to Users table
 		await sequelize.query(`
@@ -89,6 +97,8 @@ await sequelize.query(`
 			);
 		`);
 		logger.info('✓ Đã tạo News table');
+
+		
 
 		logger.info('🎉 Cập nhật schema database thành công!');
 	} catch (error) {

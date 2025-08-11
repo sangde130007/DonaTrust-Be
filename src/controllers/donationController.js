@@ -1,58 +1,61 @@
-const { check } = require('express-validator');
+// src/controllers/donationController.js
 const donationService = require('../services/donationService');
-const validate = require('../middleware/validationMiddleware');
+const PayOS = require('@payos/node');
+const { catchAsync } = require('../utils/catchAsync');
+const { AppError } = require('../utils/errorHandler');
 
-exports.create = [
-  check('user_id').notEmpty().withMessage('ID người dùng là bắt buộc'),
-  check('campaign_id').notEmpty().withMessage('ID chiến dịch là bắt buộc'),
-  check('amount').isFloat({ min: 0 }).withMessage('Số tiền không hợp lệ'),
-  validate,
-  async (req, res, next) => {
-    try {
-      const donation = await donationService.create(req.body);
-      res.status(201).json(donation);
-    } catch (error) {
-      next(error);
-    }
-  },
-];
+const payos = new PayOS(
+  process.env.PAYOS_CLIENT_ID,
+  process.env.PAYOS_API_KEY,
+  process.env.PAYOS_CHECKSUM_KEY
+);
 
-exports.getAll = async (req, res, next) => {
-  try {
-    const donations = await donationService.getAll();
-    res.json(donations);
-  } catch (error) {
-    next(error);
+exports.createPayment = catchAsync(async (req, res) => {
+  const { campaign_id, amount, blessing, full_name, email, anonymous, user_id } = req.body;
+
+  const paymentData = await donationService.createDonationPayment({
+    campaign_id,
+    amount,
+    blessing,
+    full_name,
+    email,
+    anonymous,
+    user_id
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: paymentData
+  });
+});
+
+exports.handleWebhook = catchAsync(async (req, res) => {
+  // Xác thực checksum từ PayOS
+  const isValid = payos.verifyPaymentWebhook(req.body);
+  if (!isValid) {
+    throw new AppError('Invalid webhook signature', 403);
   }
-};
 
-exports.getById = async (req, res, next) => {
+  await donationService.handlePayOSWebhook(req.body);
+  res.status(200).json({ message: 'Webhook processed successfully' });
+});
+
+exports.getDonationsByCampaign = catchAsync(async (req, res) => {
+  const { campaign_id } = req.params;
+  const donations = await donationService.getDonationsByCampaign(campaign_id);
+  res.status(200).json({ status: 'success', data: donations });
+});
+
+exports.getDonationHistory = async (req, res) => {
   try {
-    const donation = await donationService.getById(req.params.id);
-    res.json(donation);
-  } catch (error) {
-    next(error);
-  }
-};
+    const page = req.query.page || 1;
+    const limit = req.query.limit || 5;
+    const campaign_id = req.query.campaign_id || null;
 
-exports.update = [
-  check('amount').optional().isFloat({ min: 0 }).withMessage('Số tiền không hợp lệ'),
-  validate,
-  async (req, res, next) => {
-    try {
-      const donation = await donationService.update(req.params.id, req.body);
-      res.json(donation);
-    } catch (error) {
-      next(error);
-    }
-  },
-];
-
-exports.delete = async (req, res, next) => {
-  try {
-    await donationService.delete(req.params.id);
-    res.json({ message: 'Đã xóa khoản quyên góp' });
-  } catch (error) {
-    next(error);
+    const result = await donationService.getDonationHistory({ campaign_id, page, limit });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Không thể lấy lịch sử quyên góp' });
   }
 };
