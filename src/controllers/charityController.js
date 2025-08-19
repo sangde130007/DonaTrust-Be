@@ -82,7 +82,6 @@ exports.registerCharity = [
   check('description').notEmpty().withMessage('Mô tả không được để trống'),
   check('mission').notEmpty().withMessage('Sứ mệnh không được để trống'),
   check('license_number').notEmpty().withMessage('Số giấy phép không được để trống'),
-  check('license_document').isURL().withMessage('Link giấy phép không hợp lệ'),
   check('address').notEmpty().withMessage('Địa chỉ không được để trống'),
   check('city').notEmpty().withMessage('Thành phố không được để trống'),
   check('phone')

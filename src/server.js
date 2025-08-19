@@ -219,14 +219,13 @@ const swaggerOptions = {
 const specs = swaggerJsdoc(swaggerOptions);
 
 // Middleware
-app.use(
-	cors({
-		origin: '*', // Mở toàn bộ CORS
-		methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-		allowedHeaders: ['Content-Type', 'Authorization'],
-		credentials: true,
-	})
-);
+app.use(cors({
+  origin: '*',                               // cho phép mọi origin
+  credentials: false,                        // ⬅️ TẮT credentials
+  methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
+}));
+
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -313,7 +312,6 @@ sequelize
 		logger.error('Lỗi khởi động server:', err);
 		process.exit(1);
 	});
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 	
 // Graceful shutdown
 process.on('SIGTERM', () => {

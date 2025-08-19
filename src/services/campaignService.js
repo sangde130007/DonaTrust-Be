@@ -372,11 +372,11 @@ exports.getCampaignById = async (campaignId) => {
       {
         model: Charity,
         as: 'charity',
-        attributes: ['charity_id', 'name', 'logo_url', 'verification_status', 'rating'],
+attributes: ['charity_id', 'user_id', 'name', 'logo_url', 'verification_status', 'rating'],        
         where: { verification_status: 'verified' },
       },
     ],
-  });
+  })  ;
 
   if (!campaign) throw new AppError('Không tìm thấy chiến dịch', 404);
 
