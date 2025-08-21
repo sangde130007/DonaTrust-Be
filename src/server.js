@@ -1,11 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
 const sequelize = require('./config/database');
 const routes = require('./routes');
 const errorMiddleware = require('./middleware/errorMiddleware');
 const logger = require('./utils/logger');
 const dotenv = require('dotenv');
+const { handleSocketConnection } = require('./controllers/chatController');
 
 // Import models và associations
 require('./models/associations');
@@ -58,6 +61,7 @@ if (missingEnvVars.length > 0) {
 }
 
 const app = express();
+const server = http.createServer(app);
 
 // Swagger configuration
 const swaggerOptions = {
@@ -219,30 +223,34 @@ const swaggerOptions = {
 const specs = swaggerJsdoc(swaggerOptions);
 
 // Middleware
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'https://donatrust.info.vn'
-    ];
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200, // <--- Add this line
-}));
+app.use(
+	cors({
+		origin: '*', // Mở toàn bộ CORS
+		methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+		allowedHeaders: ['Content-Type', 'Authorization'],
+		credentials: true,
+	})
+);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Socket.IO configuration
+const io = new Server(server, {
+	cors: {
+		origin: '*',
+		methods: ['GET', 'POST'],
+		credentials: true
+	}
+});
+
+// Handle socket connections
+io.on('connection', (socket) => {
+	handleSocketConnection(io, socket);
+});
 
 // API Documentation
 app.use(
@@ -301,11 +309,13 @@ sequelize
 	})
 	.then(async () => {
 		const PORT = process.env.PORT || 3000;
-		app.listen(PORT, '0.0.0.0', () => {
-    	logger.info(`Server đang chạy trên cổng ${PORT}`);
-    	logger.info(`API Documentation: http://localhost:${PORT}/api-docs`);
-    	logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
-	});
+		server.listen(PORT, () => {
+			logger.info(`Server đang chạy trên cổng ${PORT}`);
+			logger.info(`API Documentation: http://localhost:${PORT}/api-docs`);
+			logger.info(`Socket.IO ready for connections`);
+			logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+		});
+
 		// Tạo sample data nếu là development và chưa có dữ liệu
 		if (process.env.NODE_ENV === 'development') {
 			const { createSampleData } = require('./utils/seeders');

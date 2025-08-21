@@ -155,7 +155,10 @@ class AdminService {
 
 	async getPendingCampaigns() {
 		return await Campaign.findAll({
-			where: { approval_status: CAMPAIGN_APPROVAL_STATUS.PENDING },
+			where: {
+				approval_status: 'pending',
+				dao_approval_status: 'dao_approved' // ✅ Chỉ hiển thị campaigns đã pass DAO vote
+			},
 			include: [
 				{
 					model: Charity,
@@ -170,7 +173,7 @@ class AdminService {
 					],
 				},
 			],
-			order: [['created_at', 'ASC']],
+			order: [['dao_approved_at', 'ASC']], // Sắp xếp theo thời gian DAO approve
 		});
 	}
 
@@ -389,6 +392,23 @@ class AdminService {
 		return user;
 	}
 
+	async updateUserRole(userId, newRole, adminId) {
+		const allowedRoles = [ROLES.DONOR, ROLES.CHARITY, ROLES.DAO_MEMBER];
+		if (!allowedRoles.includes(newRole)) {
+			throw new AppError('Chỉ được đổi sang các role: donor, charity, dao_member', 400);
+		}
+		const user = await User.findByPk(userId);
+		if (!user) {
+			throw new AppError('Không tìm thấy người dùng', 404);
+		}
+		if (user.role === ROLES.ADMIN) {
+			throw new AppError('Không thể đổi role của admin', 400);
+		}
+		user.role = newRole;
+		await user.save();
+		return user;
+	}
+
 	// ================================
 	// VOTING MANAGEMENT
 	// ================================
@@ -591,6 +611,52 @@ class AdminService {
 			totalDonationAmount: totalDonationAmount || 0,
 			pendingApprovals: pendingCharities + pendingCampaigns,
 		};
+	}
+
+	/**
+ * Lấy campaigns đã được DAO approve
+ */
+	async getDAOApprovedCampaigns() {
+		return await Campaign.findAll({
+			where: {
+				dao_approval_status: 'dao_approved',
+				approval_status: 'pending'
+			},
+			include: [
+				{
+					model: Charity,
+					as: 'charity',
+					attributes: ['charity_id', 'name'],
+				}
+			],
+			order: [['dao_approved_at', 'ASC']],
+		});
+	}
+
+	/**
+ * Admin phê duyệt campaign đã được DAO approve
+ */
+	async approveDAOApprovedCampaign(campaignId, adminId) {
+		const campaign = await Campaign.findOne({
+			where: {
+				campaign_id: campaignId,
+				dao_approval_status: 'dao_approved',
+				approval_status: 'pending'
+			}
+		});
+
+		if (!campaign) {
+			throw new AppError('Không tìm thấy chiến dịch hoặc chưa được DAO phê duyệt', 404);
+		}
+
+		await campaign.update({
+			approval_status: 'approved',
+			approved_at: new Date(),
+			approved_by: adminId,
+			status: 'active'
+		});
+
+		return campaign;
 	}
 }
 
