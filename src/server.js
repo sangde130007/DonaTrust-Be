@@ -1,11 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
 const sequelize = require('./config/database');
 const routes = require('./routes');
 const errorMiddleware = require('./middleware/errorMiddleware');
 const logger = require('./utils/logger');
 const dotenv = require('dotenv');
+const { handleSocketConnection } = require('./controllers/chatController');
 
 // Import models và associations
 require('./models/associations');
@@ -58,6 +61,7 @@ if (missingEnvVars.length > 0) {
 }
 
 const app = express();
+const server = http.createServer(app);
 
 // Swagger configuration
 const swaggerOptions = {
@@ -234,6 +238,20 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Socket.IO configuration
+const io = new Server(server, {
+	cors: {
+		origin: '*',
+		methods: ['GET', 'POST'],
+		credentials: true
+	}
+});
+
+// Handle socket connections
+io.on('connection', (socket) => {
+	handleSocketConnection(io, socket);
+});
+
 // API Documentation
 app.use(
 	'/api-docs',
@@ -291,9 +309,10 @@ sequelize
 	})
 	.then(async () => {
 		const PORT = process.env.PORT || 3000;
-		app.listen(PORT, () => {
+		server.listen(PORT, () => {
 			logger.info(`Server đang chạy trên cổng ${PORT}`);
 			logger.info(`API Documentation: http://localhost:${PORT}/api-docs`);
+			logger.info(`Socket.IO ready for connections`);
 			logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
 		});
 
@@ -314,7 +333,6 @@ sequelize
 		logger.error('Lỗi khởi động server:', err);
 		process.exit(1);
 	});
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

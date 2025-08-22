@@ -12,6 +12,7 @@ const notificationRoutes = require('./notifications');
 const adminRoutes = require('./admin');
 const newsRoutes = require('./news');
 const daoRoutes = require('./dao');
+const chatRoutes = require('./chat');
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
@@ -25,6 +26,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/admin', adminRoutes);
 router.use('/news', newsRoutes);
 router.use('/dao', daoRoutes);
+router.use('/chat', chatRoutes);
 
 
 module.exports = router;
