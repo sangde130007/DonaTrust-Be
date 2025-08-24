@@ -174,7 +174,10 @@ async verifyCharity(charityId, payload) {
 
 	async getPendingCampaigns() {
 		return await Campaign.findAll({
-			where: { approval_status: CAMPAIGN_APPROVAL_STATUS.PENDING },
+			where: {
+				approval_status: 'pending',
+				dao_approval_status: 'dao_approved' // ✅ Chỉ hiển thị campaigns đã pass DAO vote
+			},
 			include: [
 				{
 					model: Charity,
@@ -189,7 +192,7 @@ async verifyCharity(charityId, payload) {
 					],
 				},
 			],
-			order: [['created_at', 'ASC']],
+			order: [['dao_approved_at', 'ASC']], // Sắp xếp theo thời gian DAO approve
 		});
 	}
 

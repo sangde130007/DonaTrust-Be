@@ -96,28 +96,26 @@ class DAOService {
    * Lấy chi tiết campaign với vote info
    */
   async getCampaignDetail(campaignId, userId) {
-   const campaign = await Campaign.findOne({
-  where: {
-    campaign_id: campaignId,
-    approval_status: 'pending'
-  },
-  attributes: { exclude: [] }, // <-- đảm bảo không bị giới hạn trường
-  include: [
-    {
-      model: Charity,
-      as: 'charity',
-      attributes: ['charity_id', 'name', 'verification_status', 'email', 'phone'],
+    const campaign = await Campaign.findOne({
+      where: {
+        campaign_id: campaignId,
+        approval_status: 'pending'
+      },
       include: [
         {
-          model: User,
-          as: 'user',
-          attributes: ['user_id', 'full_name', 'email'],
-        },
+          model: Charity,
+          as: 'charity',
+          attributes: ['charity_id', 'name', 'verification_status', 'email', 'phone'],
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['user_id', 'full_name', 'email'],
+            },
+          ],
+        }
       ],
-    }
-  ],
-});
-
+    });
 
     if (!campaign) {
       throw new AppError('Không tìm thấy chiến dịch hoặc chiến dịch đã được xử lý', 404);
@@ -233,29 +231,32 @@ class DAOService {
 
     const campaign = await Campaign.findByPk(campaignId);
 
-    // Điều kiện: cần ít nhất 5 votes và > 50% approve
+    // ✅ ĐIỀU KIỆN: cần ít nhất 5 votes
     if (totalVotes >= 5) {
       if (approvalRate > 50) {
-        // Đưa lên admin để duyệt
+        // ✅ PASS: Chuyển cho admin duyệt
         await campaign.update({
           dao_approval_status: 'dao_approved',
           dao_approved_at: new Date(),
-          dao_approval_rate: approvalRate.toFixed(1)
+          dao_approval_rate: approvalRate.toFixed(1),
+          // Vẫn giữ approval_status = 'pending' để admin duyệt tiếp
         });
 
-        logger.info(`Campaign ${campaignId} passed DAO vote (${approvalRate.toFixed(1)}%) - sent to admin review`);
+        logger.info(`Campaign ${campaignId} passed DAO vote (${approvalRate.toFixed(1)}%) - sent to admin for final approval`);
       } else {
-        // Không đạt yêu cầu
+        // ❌ FAIL: Từ chối luôn
         await campaign.update({
           dao_approval_status: 'dao_rejected',
           dao_rejected_at: new Date(),
           dao_approval_rate: approvalRate.toFixed(1),
-          rejection_reason: `Campaign không đạt yêu cầu vote DAO (${approvalRate.toFixed(1)}% approval rate)`
+          approval_status: 'rejected', // Từ chối luôn, không cần admin
+          rejection_reason: `Campaign không đạt yêu cầu vote DAO (${approvalRate.toFixed(1)}% approval rate, cần >50%)`
         });
 
-        logger.info(`Campaign ${campaignId} failed DAO vote (${approvalRate.toFixed(1)}%) - moved to rejected list`);
+        logger.info(`Campaign ${campaignId} failed DAO vote (${approvalRate.toFixed(1)}%) - automatically rejected`);
       }
     }
+    // Nếu chưa đủ 5 votes thì vẫn ở trạng thái pending để DAO tiếp tục vote
   }
 
   /**
