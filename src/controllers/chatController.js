@@ -51,20 +51,26 @@ const joinCharityChat = async (req, res) => {
     const { charityId } = req.params;
     const userId = req.user.user_id;
 
+    logger.info(`User ${userId} attempting to join charity chat ${charityId}`);
+
     // Verify charity exists
     const charity = await Charity.findByPk(charityId, {
       include: [{
         model: User,
+        as: 'user',
         attributes: ['user_id', 'full_name', 'role']
       }]
     });
 
     if (!charity) {
+      logger.warn(`Charity ${charityId} not found`);
       return res.status(404).json({
         status: 'error',
         message: 'Charity not found'
       });
     }
+
+    logger.info(`Charity found: ${charity.name}`);
 
     // Get or create chat room
     const room = getChatRoom(charityId);
@@ -85,9 +91,19 @@ const joinCharityChat = async (req, res) => {
 
   } catch (error) {
     logger.error('Error joining charity chat:', error);
+
+    // Provide more specific error messages
+    let errorMessage = 'Internal server error';
+    if (error.name === 'SequelizeDatabaseError') {
+      errorMessage = 'Database connection error';
+    } else if (error.name === 'SequelizeValidationError') {
+      errorMessage = 'Invalid charity data';
+    }
+
     res.status(500).json({
       status: 'error',
-      message: 'Internal server error'
+      message: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -100,24 +116,31 @@ const joinCampaignChat = async (req, res) => {
     const { campaignId } = req.params;
     const userId = req.user.user_id;
 
+    logger.info(`User ${userId} attempting to join campaign chat ${campaignId}`);
+
     // Verify campaign exists and get charity info
     const campaign = await Campaign.findByPk(campaignId, {
       include: [{
         model: Charity,
+        as: 'charity',
         attributes: ['charity_id', 'name', 'logo_url'],
         include: [{
           model: User,
+          as: 'user',
           attributes: ['user_id', 'full_name', 'role']
         }]
       }]
     });
 
     if (!campaign) {
+      logger.warn(`Campaign ${campaignId} not found`);
       return res.status(404).json({
         status: 'error',
         message: 'Campaign not found'
       });
     }
+
+    logger.info(`Campaign found: ${campaign.title}`);
 
     // Get or create campaign chat room
     const room = getCampaignChatRoom(campaignId);
@@ -129,7 +152,7 @@ const joinCampaignChat = async (req, res) => {
         campaign: {
           campaign_id: campaign.campaign_id,
           title: campaign.title,
-          charity: campaign.Charity
+          charity: campaign.charity
         },
         participantCount: room.participants.size,
         canChat: true
@@ -138,9 +161,19 @@ const joinCampaignChat = async (req, res) => {
 
   } catch (error) {
     logger.error('Error joining campaign chat:', error);
+
+    // Provide more specific error messages
+    let errorMessage = 'Internal server error';
+    if (error.name === 'SequelizeDatabaseError') {
+      errorMessage = 'Database connection error';
+    } else if (error.name === 'SequelizeValidationError') {
+      errorMessage = 'Invalid campaign data';
+    }
+
     res.status(500).json({
       status: 'error',
-      message: 'Internal server error'
+      message: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -208,16 +241,18 @@ const handleSocketConnection = (io, socket) => {
         return;
       }
 
-      // Store socket info
+      // Store socket info with roomId - THIS WAS THE KEY FIX
       activeSockets.set(socket.id, {
         userId: user.user_id,
         userName: user.full_name,
         userRole: user.role,
-        roomId
+        roomId: roomId // FIXED: Set the roomId here
       });
 
       // Join socket room
       socket.join(roomId);
+
+      logger.info(`Socket ${socket.id} joined room ${roomId} for user ${user.full_name}`);
 
       // Update room participants
       let room;
@@ -251,12 +286,28 @@ const handleSocketConnection = (io, socket) => {
     }
   });
 
-  // Send message event
+  // Send message event - FIXED the authorization logic
   socket.on('send-message', ({ roomId, message, messageType = 'text' }) => {
     try {
       const socketInfo = activeSockets.get(socket.id);
-      if (!socketInfo || socketInfo.roomId !== roomId) {
+      logger.info(`Send message attempt - Socket: ${socket.id}, Room: ${roomId}, SocketInfo:`, socketInfo);
+
+      if (!socketInfo) {
+        logger.warn(`Socket ${socket.id} not authenticated`);
+        socket.emit('error', { message: 'Socket not authenticated' });
+        return;
+      }
+
+      // FIXED: Check if user is authorized for this room
+      if (socketInfo.roomId !== roomId) {
+        logger.warn(`Room authorization failed - Socket room: ${socketInfo.roomId}, Requested room: ${roomId}`);
         socket.emit('error', { message: 'Not authorized for this room' });
+        return;
+      }
+
+      // Validate message content
+      if (!message || message.trim() === '') {
+        socket.emit('error', { message: 'Message cannot be empty' });
         return;
       }
 
@@ -291,7 +342,7 @@ const handleSocketConnection = (io, socket) => {
       // Broadcast message to all participants in room
       io.to(roomId).emit('new-message', messageData);
 
-      logger.info(`Message sent in room ${roomId} by ${socketInfo.userName}`);
+      logger.info(`Message sent in room ${roomId} by ${socketInfo.userName}: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`);
 
     } catch (error) {
       logger.error('Error sending message:', error);
@@ -325,27 +376,29 @@ const handleSocketConnection = (io, socket) => {
     if (socketInfo) {
       const { roomId, userName } = socketInfo;
 
-      // Remove from room participants
-      let room;
-      if (roomId.startsWith('campaign_')) {
-        const campaignId = roomId.replace('campaign_', '');
-        room = getCampaignChatRoom(campaignId);
-      } else {
-        room = getChatRoom(roomId);
-      }
+      // Remove from room participants if roomId exists
+      if (roomId) {
+        let room;
+        if (roomId.startsWith('campaign_')) {
+          const campaignId = roomId.replace('campaign_', '');
+          room = getCampaignChatRoom(campaignId);
+        } else {
+          room = getChatRoom(roomId);
+        }
 
-      room.participants.delete(socket.id);
+        room.participants.delete(socket.id);
 
-      // Clean up empty rooms
-      if (room.participants.size === 0) {
-        chatRooms.delete(roomId);
-        logger.info(`Cleaned up empty room: ${roomId}`);
-      } else {
-        // Notify room about user leaving
-        socket.to(roomId).emit('user-left', {
-          userName,
-          participantCount: room.participants.size
-        });
+        // Clean up empty rooms
+        if (room.participants.size === 0) {
+          chatRooms.delete(roomId);
+          logger.info(`Cleaned up empty room: ${roomId}`);
+        } else {
+          // Notify room about user leaving
+          socket.to(roomId).emit('user-left', {
+            userName,
+            participantCount: room.participants.size
+          });
+        }
       }
 
       // Remove socket info
@@ -358,11 +411,130 @@ const handleSocketConnection = (io, socket) => {
   });
 };
 
+// REST API functions for chat messages
+const sendMessage = async (req, res) => {
+  try {
+    const { roomId, message, messageType = 'text' } = req.body;
+    const userId = req.user.user_id;
+
+    if (!roomId || !message) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Room ID and message are required'
+      });
+    }
+
+    // Get user info
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+
+    // Create message object
+    const messageData = {
+      id: Date.now() + Math.random(),
+      userId: user.user_id,
+      userName: user.full_name,
+      userRole: user.role,
+      message: message.trim(),
+      messageType,
+      timestamp: new Date(),
+      roomId
+    };
+
+    // Get room and add message
+    let room;
+    if (roomId.startsWith('campaign_')) {
+      const campaignId = roomId.replace('campaign_', '');
+      room = getCampaignChatRoom(campaignId);
+    } else {
+      room = getChatRoom(roomId);
+    }
+
+    room.messages.push(messageData);
+
+    // Keep only last 100 messages per room
+    if (room.messages.length > 100) {
+      room.messages = room.messages.slice(-100);
+    }
+
+    // Broadcast message to all participants in room via Socket.IO
+    const io = req.app.get('io');
+    if (io) {
+      io.to(roomId).emit('new-message', messageData);
+    }
+
+    res.json({
+      status: 'success',
+      data: messageData
+    });
+
+  } catch (error) {
+    logger.error('Error sending message:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+};
+
+const getChatMessages = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { page = 1, limit = 50 } = req.query;
+    const userId = req.user.user_id;
+
+    if (!roomId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Room ID is required'
+      });
+    }
+
+    // Get room messages
+    let room;
+    if (roomId.startsWith('campaign_')) {
+      const campaignId = roomId.replace('campaign_', '');
+      room = getCampaignChatRoom(campaignId);
+    } else {
+      room = getChatRoom(roomId);
+    }
+
+    // Paginate messages
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + parseInt(limit);
+    const messages = room.messages.slice(startIndex, endIndex);
+
+    res.json({
+      status: 'success',
+      data: messages,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: room.messages.length,
+        pages: Math.ceil(room.messages.length / limit)
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error getting chat messages:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+};
+
 module.exports = {
   joinCharityChat,
   joinCampaignChat,
   getActiveChatRooms,
   handleSocketConnection,
   getChatRoom,
-  getCampaignChatRoom
+  getCampaignChatRoom,
+  sendMessage,
+  getChatMessages
 };

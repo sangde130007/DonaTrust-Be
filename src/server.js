@@ -263,18 +263,18 @@ sequelize
     // Sync database - chỉ tạo tables nếu chưa tồn tại
     await sequelize.sync({ force: false, alter: false });
 
-    // Update schema with new fields (development mode)
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        const { updateDatabaseSchema } = require('./utils/updateSchema');
-        await updateDatabaseSchema();
-      } catch (error) {
-        logger.warn('Schema update failed (this may be normal if already updated):', error.message);
-      }
-    }
+    // Update schema with new fields (development mode) - DISABLED FOR NOW
+    // if (process.env.NODE_ENV === 'development') {
+    //   try {
+    //     const { updateDatabaseSchema } = require('./utils/updateSchema');
+    //     await updateDatabaseSchema();
+    //   } catch (error) {
+    //     logger.warn('Schema update failed (this may be normal if already updated):', error.message);
+    //   }
+    // }
   })
   .then(async () => {
-    const PORT = process.env.PORT || 3000;
+    const PORT = process.env.PORT || 5000;
 
     server.listen(PORT, () => {
       logger.info(`Server đang chạy trên cổng ${PORT}`);

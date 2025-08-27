@@ -4,7 +4,7 @@ require('dotenv').config();
 const dbConfig = {
 	host: process.env.DB_HOST || 'localhost',
 	port: 5432,
-	database: 'donastrust', // Change this to your database name
+	database: 'donatrust', // Change this to your database name
 	user: process.env.DB_USER || 'postgres', // Change this to your database user
 	password: process.env.DB_PASSWORD || 'postgres', // Change this to your database password
 };
