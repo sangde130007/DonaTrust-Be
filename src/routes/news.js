@@ -14,6 +14,9 @@ router.get('/', newsController.getPublishedNews);
 router.get('/featured', newsController.getFeaturedNews);
 router.get('/categories', newsController.getNewsCategories);
 router.get('/:id', newsController.getNewsById);
-router.put('/:id/view', newsController.incrementNewsViews);
+
+// Đếm lượt xem (giữ PUT để tương thích cũ, thêm POST cho hợp lý semantics)
+router.post('/:id/view', newsController.incrementNewsViews);
+router.put('/:id/view', newsController.incrementNewsViews); // backward compatible
 
 module.exports = router;
