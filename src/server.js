@@ -239,7 +239,7 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200,
+   optionsSuccessStatus: 200, // <--- Add this line
 }));
 
 app.use(express.json({ limit: '10mb' }));
