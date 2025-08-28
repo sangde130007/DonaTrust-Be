@@ -17,7 +17,7 @@ const logger = require('../utils/logger');
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/google/callback'
+  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/aut h/google/callback'
 );
 
 // =======================================

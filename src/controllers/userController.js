@@ -222,57 +222,48 @@ exports.changePassword = [
  *         description: File quá lớn
  */
 exports.uploadAvatar = async (req, res, next) => {
-	try {
-		console.log('📁 Avatar upload request:', {
-			userId: req.user?.user_id,
-			file: req.file
-				? {
-						filename: req.file.filename,
-						originalname: req.file.originalname,
-						mimetype: req.file.mimetype,
-						size: req.file.size,
-				  }
-				: 'No file',
-		});
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'No file uploaded. Please select an image file.',
+      });
+    }
 
-		if (!req.file) {
-			return res.status(400).json({
-				status: 'error',
-				message: 'No file uploaded. Please select an image file.',
-			});
-		}
+    // Validate kiểu file & size như bạn đã có...
+    // ...
 
-		// Validate file type (double check after multer)
-		const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-		if (!allowedTypes.includes(req.file.mimetype)) {
-			return res.status(400).json({
-				status: 'error',
-				message: 'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.',
-			});
-		}
+    // Gọi service để cập nhật DB, service trả về relative path
+    const result = await userService.uploadAvatar(req.user.user_id, req.file);
+    // result.avatar_url: '/uploads/avatars/xxx.jpg'
+    // result.user.profile_image: '/uploads/avatars/xxx.jpg'
 
-		// Validate file size (double check after multer)
-		const maxSize = 5 * 1024 * 1024; // 5MB
-		if (req.file.size > maxSize) {
-			return res.status(413).json({
-				status: 'error',
-				message: 'File too large. Please select an image smaller than 5MB.',
-			});
-		}
+    // Build base URL từ env hoặc từ req
+    const baseUrl =
+      process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
 
-		const result = await userService.uploadAvatar(req.user.user_id, req.file);
+    const toAbsolute = (p) => {
+      if (!p) return p;
+      if (/^https?:\/\//i.test(p)) return p;
+      return `${baseUrl}${p.startsWith('/') ? '' : '/'}${p}`;
+    };
 
-		console.log('✅ Avatar upload successful:', {
-			userId: req.user.user_id,
-			avatarUrl: result.avatar_url,
-		});
+    const responsePayload = {
+      status: 'success',
+      message: 'Avatar uploaded successfully',
+      avatar_url: toAbsolute(result.avatar_url),
+      user: {
+        ...result.user,
+        profile_image: toAbsolute(result.user?.profile_image),
+      },
+    };
 
-		res.json(result);
-	} catch (error) {
-		console.error('❌ Avatar upload failed:', error);
-		next(error);
-	}
+    return res.json(responsePayload);
+  } catch (error) {
+    next(error);
+  }
 };
+
 
 /**
  * @swagger

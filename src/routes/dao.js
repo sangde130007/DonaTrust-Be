@@ -107,7 +107,9 @@ const { requireRole } = require('../middleware/roleMiddleware');
 
 // Apply auth middleware
 router.use(authMiddleware);
-
+router.get('/stats', requireRole('dao_member'), daoController.getStats);
+// Add this alias so FE call /dao/statistics works too
+router.get('/statistics', requireRole('dao_member'), daoController.getStats);
 /**
  * @swagger
  * /api/dao/campaigns/pending:

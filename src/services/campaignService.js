@@ -9,7 +9,7 @@ const logger = require('../utils/logger');
 /**
  * Tạo campaign mới theo payload trực tiếp (dùng cho nơi khác cần)
  * payload: {
- *   charity_id, title, description, detailed_description, goal_amount,
+ *   charity_id, title, fedescription, detailed_description, goal_amount,
  *   start_date, end_date, category, location,
  *   image_url, gallery_images (array), qr_code_url
  * }
