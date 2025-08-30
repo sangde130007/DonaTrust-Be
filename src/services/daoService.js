@@ -117,10 +117,7 @@ class DAOService {
       ],
     });
 
-    if (!campaign) {
-      throw new AppError('Không tìm thấy chiến dịch hoặc chiến dịch đã được xử lý', 404);
-    }
-
+ 
     // Lấy tất cả votes cho campaign này
     const votes = await CampaignVote.findAll({
       where: { campaign_id: campaignId },
@@ -231,33 +228,43 @@ class DAOService {
 
     const campaign = await Campaign.findByPk(campaignId);
 
-    // ✅ ĐIỀU KIỆN: cần ít nhất 5 votes
+    // ✅ Cần ít nhất 5 votes
     if (totalVotes >= 5) {
       if (approvalRate > 50) {
-        // ✅ PASS: Chuyển cho admin duyệt
+        // ✅ PASS DAO → Xuất bản luôn, không cần admin
         await campaign.update({
           dao_approval_status: 'dao_approved',
           dao_approved_at: new Date(),
           dao_approval_rate: approvalRate.toFixed(1),
-          // Vẫn giữ approval_status = 'pending' để admin duyệt tiếp
+
+          // Xuất bản:
+          approval_status: 'approved',   // đã phê duyệt
+          status: 'active',              // đang hoạt động (để hiện trên trang chủ nếu FE lọc theo status)
+          approved_at: new Date(),
+          approved_by: 'dao_auto'
         });
 
-        logger.info(`Campaign ${campaignId} passed DAO vote (${approvalRate.toFixed(1)}%) - sent to admin for final approval`);
+        logger.info(
+          `Campaign ${campaignId} auto-published by DAO (${approvalRate.toFixed(1)}% approval)`
+        );
       } else {
-        // ❌ FAIL: Từ chối luôn
+        // ❌ FAIL: Từ chối luôn (giữ nguyên nhánh bạn đã viết)
         await campaign.update({
           dao_approval_status: 'dao_rejected',
           dao_rejected_at: new Date(),
           dao_approval_rate: approvalRate.toFixed(1),
-          approval_status: 'rejected', // Từ chối luôn, không cần admin
+          approval_status: 'rejected',
           rejection_reason: `Campaign không đạt yêu cầu vote DAO (${approvalRate.toFixed(1)}% approval rate, cần >50%)`
         });
 
-        logger.info(`Campaign ${campaignId} failed DAO vote (${approvalRate.toFixed(1)}%) - automatically rejected`);
+        logger.info(
+          `Campaign ${campaignId} failed DAO vote (${approvalRate.toFixed(1)}%) - automatically rejected`
+        );
       }
     }
-    // Nếu chưa đủ 5 votes thì vẫn ở trạng thái pending để DAO tiếp tục vote
+    // Nếu chưa đủ 5 votes thì vẫn pending để DAO tiếp tục vote
   }
+
 
   /**
    * Lấy danh sách campaigns đã được DAO approve (cho admin)
