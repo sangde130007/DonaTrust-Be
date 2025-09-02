@@ -151,6 +151,7 @@ const uploadDocument = createDocumentUpload().single('document');
 const uploadCertificates = createCertificateUpload().array('certificates', 5);
 const uploadReport = createReportUpload().single('report');
 
+const uploadReportFiles = createReportUpload().array('evidence_files', 5);
 /* NEW: upload ảnh updates */
 const uploadUpdateImages = createUpdatesUpload().array('images', 10);
 
@@ -182,7 +183,7 @@ module.exports = {
   uploadCertificates,
   uploadReport,
   uploadUpdateImages, // NEW
-
+  uploadReportFiles,
   // factories
   createAvatarUpload,
   createCampaignUpload,
@@ -194,3 +195,4 @@ module.exports = {
   ensureUploadDirs,
   handleMulterError,
 };
+

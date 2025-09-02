@@ -5,6 +5,7 @@ const router = express.Router();
 const { requireCharity, isCampaignOwner } = require('../middleware/roleMiddleware');
 const campaignController = require('../controllers/campaignController');
 const authMiddleware = require('../middleware/authMiddleware');
+const reportController = require('../controllers/reportCampaignController');
 
 const {
   createCampaignUpload,
@@ -77,4 +78,21 @@ router.delete(
 isCampaignOwner, 
   campaignController.deleteCampaignUpdate 
 );
+
+router.post('/:campaignId/report', authMiddleware, (req, res, next) => {
+  const middlewares = reportController.createReport;
+  let index = 0;
+  
+  const runNext = (err) => {
+    if (err) return next(err);
+    if (index >= middlewares.length) return;
+    
+    const middleware = middlewares[index++];
+    middleware(req, res, runNext);
+  };
+  
+  runNext();
+});
+
+
 module.exports = router;
