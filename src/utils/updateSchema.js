@@ -146,6 +146,61 @@
       `);
 
       logger.info('✓ Đã tạo/đảm bảo News table');
+// ===== ReportCampaigns =====
+await sequelize.query(`
+  CREATE TABLE IF NOT EXISTS "ReportCampaigns" (
+    "report_id" SERIAL PRIMARY KEY,
+    "campaign_id" UUID NOT NULL,
+    "reporter_id" UUID, -- cho phép NULL để phù hợp ON DELETE SET NULL
+    "reasons" JSONB NOT NULL,
+    "other_reason" TEXT,
+    "description" TEXT,
+    "evidence_files" TEXT[],
+    "status" VARCHAR(50) NOT NULL DEFAULT 'pending' 
+      CHECK ("status" IN ('pending', 'resolved', 'dismissed')),
+    "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_report_campaign FOREIGN KEY ("campaign_id") 
+      REFERENCES "Campaigns"("campaign_id") ON DELETE CASCADE,
+    CONSTRAINT fk_report_reporter FOREIGN KEY ("reporter_id") 
+      REFERENCES "Users"("user_id") ON DELETE SET NULL
+  );
+`);
+
+
+logger.info('✓ Đã tạo/đảm bảo ReportCampaigns table');
+// ===== Notifications =====
+await sequelize.query(`
+  DO $$ BEGIN
+      CREATE TYPE notification_type_enum AS ENUM ('system', 'fundraising', 'donation', 'other');
+  EXCEPTION
+      WHEN duplicate_object THEN NULL;
+  END $$;
+
+  ALTER TABLE "Notifications"
+  ADD COLUMN IF NOT EXISTS "title" VARCHAR(255) DEFAULT 'Thông báo',
+  ADD COLUMN IF NOT EXISTS "type"  notification_type_enum DEFAULT 'system' NOT NULL;
+`);
+
+await sequelize.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='idx_notifications_user_id') THEN
+      CREATE INDEX idx_notifications_user_id ON "Notifications" ("user_id");
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='idx_notifications_type') THEN
+      CREATE INDEX idx_notifications_type ON "Notifications" ("type");
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='idx_notifications_is_read') THEN
+      CREATE INDEX idx_notifications_is_read ON "Notifications" ("is_read");
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='idx_notifications_created_at') THEN
+      CREATE INDEX idx_notifications_created_at ON "Notifications" ("created_at");
+    END IF;
+  END$$;
+`);
+
+logger.info('✓ Đã cập nhật Notifications table');
 
       logger.info('🎉 Cập nhật schema database thành công!');
     } catch (error) {

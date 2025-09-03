@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+
 const authRoutes = require('./auth');
 const userRoutes = require('./users');
 const userSocialLinkRoutes = require('./userSocialLinks');
@@ -9,11 +10,10 @@ const donationRoutes = require('./donations');
 const feedbackRoutes = require('./feedbacks');
 const voteRoutes = require('./votes');
 const notificationRoutes = require('./notifications');
-const adminRoutes = require('./admin');
+const adminRoutes = require('./admin'); // ⬅️ admin router tổng
 const newsRoutes = require('./news');
 const daoRoutes = require('./dao');
 const chatRoutes = require('./chat');
-const reportRoutes = require('./reportRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
@@ -24,10 +24,10 @@ router.use('/donations', donationRoutes);
 router.use('/feedbacks', feedbackRoutes);
 router.use('/votes', voteRoutes);
 router.use('/notifications', notificationRoutes);
-router.use('/admin', adminRoutes);
+router.use('/admin', adminRoutes);   // ⬅️ tất cả admin route nằm dưới /api/admin
 router.use('/news', newsRoutes);
 router.use('/dao', daoRoutes);
 router.use('/chat', chatRoutes);
-router.use('/reports', reportRoutes);
+router.use('/', notificationRoutes);
 
 module.exports = router;

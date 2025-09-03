@@ -12,7 +12,7 @@ const ensureUploadDirs = () => {
     path.join(__dirname, '../../uploads/documents'),
     path.join(__dirname, '../../uploads/reports'),
     path.join(__dirname, '../../uploads/certificates'),
-    path.join(__dirname, '../../uploads/updates'), // NEW: ảnh cập nhật tiến trình
+    path.join(__dirname, '../../uploads/updates'),
   ];
 
   dirs.forEach((dir) => {
@@ -76,7 +76,6 @@ const createReportStorage = () =>
     },
   });
 
-/* NEW: storage cho ảnh cập nhật tiến trình */
 const createUpdatesStorage = () =>
   multer.diskStorage({
     destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads/updates')),
@@ -121,6 +120,48 @@ const certificateFileFilter = (req, file, cb) => {
   cb(new AppError('Chỉ chấp nhận file PDF, DOC, DOCX hoặc hình ảnh (JPEG, PNG, JPG, GIF, WebP)', 400), false);
 };
 
+/* ===== Charity Registration: license, description, logo ===== */
+const createCharityRegistrationStorage = () =>
+  multer.diskStorage({
+    destination: (req, file, cb) => {
+      let dir;
+      switch (file.fieldname) {
+        case 'license':
+          dir = path.join(__dirname, '../../uploads/certificates');
+          break;
+        case 'description':
+          dir = path.join(__dirname, '../../uploads/documents');
+          break;
+        case 'logo':
+          dir = path.join(__dirname, '../../uploads/avatars');
+          break;
+        default:
+          dir = path.join(__dirname, '../../uploads/documents');
+      }
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const userId = req.user?.user_id || 'unknown';
+      const ext = path.extname(file.originalname);
+      const safeName = file.fieldname || 'file';
+      cb(null, `charity_${safeName}_${userId}-${Date.now()}-${Math.floor(Math.random() * 1e9)}${ext}`);
+    },
+  });
+
+const charityRegistrationFileFilter = (req, file, cb) => {
+  if (file.fieldname === 'logo') {
+    return imageFileFilter(req, file, cb);
+  }
+  return documentFileFilter(req, file, cb);
+};
+
+const createCharityRegistrationUpload = () =>
+  multer({
+    storage: createCharityRegistrationStorage(),
+    fileFilter: charityRegistrationFileFilter,
+    limits: { fileSize: 20 * 1024 * 1024 },
+  });
+
 /* ============ Upload factories ============ */
 const createAvatarUpload = () =>
   multer({ storage: createAvatarStorage(), fileFilter: imageFileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
@@ -137,23 +178,27 @@ const createCertificateUpload = () =>
 const createReportUpload = () =>
   multer({ storage: createReportStorage(), fileFilter: documentFileFilter, limits: { fileSize: 50 * 1024 * 1024 } });
 
-/* NEW: uploader cho ảnh cập nhật tiến trình */
 const createUpdatesUpload = () =>
   multer({ storage: createUpdatesStorage(), fileFilter: imageFileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
 
 /* ============ Middleware instances ============ */
 const uploadAvatar = createAvatarUpload().single('avatar');
-const uploadCampaignImages = createCampaignUpload().array('images', 10); // ↑ tăng lên 10
+const uploadCampaignImages = createCampaignUpload().array('images', 10);
 const uploadCampaignSingleImage = createCampaignUpload().single('image');
 const uploadQrImage = createCampaignUpload().single('qr_image');
 
 const uploadDocument = createDocumentUpload().single('document');
 const uploadCertificates = createCertificateUpload().array('certificates', 5);
 const uploadReport = createReportUpload().single('report');
-
 const uploadReportFiles = createReportUpload().array('evidence_files', 5);
-/* NEW: upload ảnh updates */
 const uploadUpdateImages = createUpdatesUpload().array('images', 10);
+
+/* ===== Instance: upload cho Charity Registration ===== */
+const uploadCharityRegistration = createCharityRegistrationUpload().fields([
+  { name: 'license', maxCount: 1 },
+  { name: 'description', maxCount: 1 },
+  { name: 'logo', maxCount: 1 },
+]);
 
 /* ============ Multer error handler ============ */
 const handleMulterError = (err, req, res, next) => {
@@ -182,17 +227,21 @@ module.exports = {
   uploadDocument,
   uploadCertificates,
   uploadReport,
-  uploadUpdateImages, // NEW
+  uploadUpdateImages,
   uploadReportFiles,
+
   // factories
   createAvatarUpload,
   createCampaignUpload,
   createDocumentUpload,
   createCertificateUpload,
   createReportUpload,
-  createUpdatesUpload, // NEW
+  createUpdatesUpload,
+
+  // charity registration
+  uploadCharityRegistration,
+  createCharityRegistrationUpload,
 
   ensureUploadDirs,
   handleMulterError,
 };
-

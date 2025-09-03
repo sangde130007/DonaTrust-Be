@@ -1,3 +1,4 @@
+// src/models/index.js
 const User = require('./User');
 const Charity = require('./Charity');
 const Campaign = require('./Campaign');
@@ -10,8 +11,11 @@ const Feedback = require('./Feedback');
 const Notification = require('./Notification');
 const News = require('./News');
 const DaoApplication = require('./DaoApplication');
+const ReportCampaign = require('./ReportCampaign'); // 🔧 NEW
 
-// User associations
+/* ============================
+ * User associations
+ * ============================ */
 User.hasOne(Charity, { foreignKey: 'user_id', as: 'charity' });
 User.hasMany(Donation, { foreignKey: 'user_id', as: 'donations' });
 User.hasMany(Vote, { foreignKey: 'user_id', as: 'votes' });
@@ -22,12 +26,16 @@ User.hasOne(UserSocialLink, { foreignKey: 'user_id', as: 'social_links' });
 User.hasMany(News, { foreignKey: 'author_id', as: 'news' });
 User.hasOne(DaoApplication, { foreignKey: 'user_id', as: 'dao_application' });
 
-// Charity associations
+/* ============================
+ * Charity associations
+ * ============================ */
 Charity.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 Charity.hasMany(Campaign, { foreignKey: 'charity_id', as: 'campaigns' });
 Charity.hasMany(FinancialReport, { foreignKey: 'charity_id', as: 'financial_reports' });
 
-// Campaign associations
+/* ============================
+ * Campaign associations
+ * ============================ */
 Campaign.belongsTo(Charity, { foreignKey: 'charity_id', as: 'charity' });
 Campaign.hasMany(Donation, { foreignKey: 'campaign_id', as: 'donations' });
 Campaign.hasMany(Vote, { foreignKey: 'campaign_id', as: 'votes' });
@@ -35,49 +43,95 @@ Campaign.hasMany(CampaignVote, { foreignKey: 'campaign_id', as: 'campaign_votes'
 Campaign.hasMany(Feedback, { foreignKey: 'campaign_id', as: 'feedbacks' });
 Campaign.hasMany(FinancialReport, { foreignKey: 'campaign_id', as: 'financial_reports' });
 
-// Donation associations
+/* ============================
+ * Donation associations
+ * ============================ */
 Donation.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 Donation.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
-// FinancialReport associations
+/* ============================
+ * FinancialReport associations
+ * ============================ */
 FinancialReport.belongsTo(Charity, { foreignKey: 'charity_id', as: 'charity' });
 FinancialReport.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
-// UserSocialLink associations
+/* ============================
+ * UserSocialLink associations
+ * ============================ */
 UserSocialLink.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
-// Vote associations
+/* ============================
+ * Vote associations
+ * ============================ */
 Vote.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 Vote.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
-// CampaignVote associations
+/* ============================
+ * CampaignVote associations
+ * ============================ */
 CampaignVote.belongsTo(User, { foreignKey: 'voter_id', as: 'voter' });
 CampaignVote.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
-// Feedback associations
+/* ============================
+ * Feedback associations
+ * ============================ */
 Feedback.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 Feedback.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
-// Notification associations
+/* ============================
+ * Notification associations
+ * ============================ */
 Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
-// News associations
+/* ============================
+ * News associations
+ * ============================ */
 News.belongsTo(User, { foreignKey: 'author_id', as: 'author' });
 
-// DaoApplication associations
+/* ============================
+ * DaoApplication associations
+ * ============================ */
 DaoApplication.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+/* ============================
+ * ReportCampaign associations (🔧 NEW)
+ * ============================ */
+ReportCampaign.belongsTo(Campaign, {
+  foreignKey: 'campaign_id',
+  as: 'campaign',
+  onDelete: 'CASCADE',
+});
+ReportCampaign.belongsTo(User, {
+  foreignKey: 'reporter_id',
+  as: 'reporter',
+  onDelete: 'SET NULL',
+});
+
+// (Optional) Reverse relations for convenience
+Campaign.hasMany(ReportCampaign, {
+  foreignKey: 'campaign_id',
+  as: 'reports',
+});
+User.hasMany(ReportCampaign, {
+  foreignKey: 'reporter_id',
+  as: 'reports_created',
+});
+
+/* ============================
+ * Exports
+ * ============================ */
 module.exports = {
-	User,
-	Charity,
-	Campaign,
-	Donation,
-	FinancialReport,
-	UserSocialLink,
-	Vote,
-	CampaignVote,
-	Feedback,
-	Notification,
-	News,
-	DaoApplication,
+  User,
+  Charity,
+  Campaign,
+  Donation,
+  FinancialReport,
+  UserSocialLink,
+  Vote,
+  CampaignVote,
+  Feedback,
+  Notification,
+  News,
+  DaoApplication,
+  ReportCampaign, // 🔧 NEW
 };

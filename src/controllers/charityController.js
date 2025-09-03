@@ -3,6 +3,13 @@ const { check } = require('express-validator');
 const path = require('path');
 const multer = require('multer');
 
+const sequelize = require('../config/database');
+const Charity = require('../models/Charity');
+const User = require('../models/User');
+const Notification = require('../models/Notification'); // <- thêm
+const notificationService = require('../services/notificationService');
+const logger = require('../utils/logger');
+
 const charityService = require('../services/charityService');
 const campaignService = require('../services/campaignService');
 const financialReportService = require('../services/financialReportService');
@@ -10,11 +17,35 @@ const validate = require('../middleware/validationMiddleware');
 const { requireCharityOwnership, requireCharity } = require('../middleware/roleMiddleware');
 const { uploadQrImage, uploadDocument, handleMulterError } = require('../middleware/uploadMiddleware');
 
-// ===== Multer cho cập nhật campaign (cover, gallery, qr) =====
+/* ======================= Helpers ======================= */
+
+// Chuẩn hoá body khi FE gửi multipart với field "data" chứa JSON
+const normalizeRegistrationBody = (req, _res, next) => {
+  if (req.body && typeof req.body.data === 'string') {
+    try {
+      const parsed = JSON.parse(req.body.data);
+      req.body = { ...parsed, _raw: req.body };
+    } catch {
+      // ignore
+    }
+  }
+  next();
+};
+
+// Build absolute URL từ đường dẫn tương đối
+const toAbsolute = (req, relPath) => {
+  if (!relPath) return null;
+  const base = process.env.PUBLIC_API_ORIGIN || `${req.protocol}://${req.get('host')}`;
+  return relPath.startsWith('http') ? relPath : `${base}${relPath}`;
+};
+
+/* ============ Multer cho cập nhật campaign (cover, gallery, qr) ============ */
 const uploadCampaignUpdate = multer({
   dest: path.join(process.cwd(), 'uploads', 'campaigns'),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
+
+/* ======================= CRUD cơ bản (nếu dùng) ======================= */
 
 exports.create = [
   check('user_id').notEmpty().withMessage('ID người dùng là bắt buộc'),
@@ -30,7 +61,7 @@ exports.create = [
   },
 ];
 
-exports.getAll = async (req, res, next) => {
+exports.getAll = async (_req, res, next) => {
   try {
     const charities = await charityService.getAll();
     res.json(charities);
@@ -70,37 +101,57 @@ exports.delete = async (req, res, next) => {
   }
 };
 
-/**
- * @swagger
- * tags:
- *   name: Charity Management
- *   description: API quản lý tổ chức từ thiện
- */
-
+/* ======================= REGISTER CHARITY ======================= */
 exports.registerCharity = [
+  normalizeRegistrationBody,
+
   check('name').isLength({ min: 2, max: 200 }).withMessage('Tên tổ chức phải từ 2-200 ký tự'),
   check('description').notEmpty().withMessage('Mô tả không được để trống'),
   check('mission').notEmpty().withMessage('Sứ mệnh không được để trống'),
   check('license_number').notEmpty().withMessage('Số giấy phép không được để trống'),
   check('address').notEmpty().withMessage('Địa chỉ không được để trống'),
   check('city').notEmpty().withMessage('Thành phố không được để trống'),
-  check('phone')
-    .matches(/^[0-9]{10,11}$/)
-    .withMessage('Số điện thoại phải là 10-11 số'),
+  check('phone').matches(/^[0-9]{10,11}$/).withMessage('Số điện thoại phải là 10-11 số'),
   check('email').isEmail().withMessage('Email không hợp lệ'),
   validate,
+
   async (req, res, next) => {
     try {
-      const charity = await charityService.registerCharity(req.user.user_id, req.body);
+      const licenseFile = req.files?.license?.[0] || null;
+      const descFile    = req.files?.description?.[0] || null;
+      const logoFile    = req.files?.logo?.[0] || null;
+
+      const relLicense = licenseFile ? `/uploads/certificates/${licenseFile.filename}` : null;
+      const relDesc    = descFile    ? `/uploads/documents/${descFile.filename}`      : null;
+      const relLogo    = logoFile    ? `/uploads/avatars/${logoFile.filename}`        : null;
+
+      const license_url     = relLicense ? toAbsolute(req, relLicense) : null;
+      const description_url = relDesc    ? toAbsolute(req, relDesc)    : null;
+      const logo_url        = relLogo    ? toAbsolute(req, relLogo)    : null;
+
+      const payload = {
+        ...req.body,
+        license_url,
+        description_url,
+        logo_url,
+      };
+
+      const charity = await charityService.registerCharity(req.user.user_id, payload);
+
       res.status(201).json({
         message: 'Đăng ký tổ chức từ thiện thành công, đang chờ xác minh',
         charity,
+        license_url,
+        description_url,
+        logo_url,
       });
     } catch (error) {
       next(error);
     }
   },
 ];
+
+/* ======================= MY CHARITY ======================= */
 
 exports.getMyCharity = [
   requireCharity,
@@ -118,10 +169,7 @@ exports.updateMyCharity = [
   requireCharityOwnership,
   check('name').optional().isLength({ min: 2, max: 200 }).withMessage('Tên tổ chức phải từ 2-200 ký tự'),
   check('email').optional().isEmail().withMessage('Email không hợp lệ'),
-  check('phone')
-    .optional()
-    .matches(/^[0-9]{10,11}$/)
-    .withMessage('Số điện thoại phải là 10-11 số'),
+  check('phone').optional().matches(/^[0-9]{10,11}$/).withMessage('Số điện thoại phải là 10-11 số'),
   check('website_url').optional().isURL().withMessage('Website URL không hợp lệ'),
   validate,
   async (req, res, next) => {
@@ -149,7 +197,7 @@ exports.getCharityStats = [
   },
 ];
 
-// ============== CAMPAIGN MANAGEMENT ==============
+/* ======================= CAMPAIGN MANAGEMENT ======================= */
 
 exports.createCampaign = [
   requireCharityOwnership,
@@ -200,15 +248,14 @@ exports.getMyCampaignById = [
   },
 ];
 
-// ========= CẬP NHẬT CAMPAIGN (Fix: nhận multipart/form-data) =========
+// ========= CẬP NHẬT CAMPAIGN (multipart/form-data) =========
 exports.updateMyCampaign = [
   requireCharityOwnership,
   uploadCampaignUpdate.fields([
-    { name: 'image', maxCount: 1 },     // ảnh cover
-    { name: 'images', maxCount: 10 },   // gallery
-    { name: 'qr_image', maxCount: 1 },  // QR ảnh
+    { name: 'image', maxCount: 1 },
+    { name: 'images', maxCount: 10 },
+    { name: 'qr_image', maxCount: 1 },
   ]),
-  // handleMulterError, // bật nếu muốn bắt lỗi sớm
   check('title').optional().isLength({ min: 5, max: 200 }).withMessage('Tiêu đề phải từ 5-200 ký tự'),
   check('goal_amount').optional().isFloat({ min: 100000 }).withMessage('Số tiền mục tiêu tối thiểu 100,000 VND'),
   validate,
@@ -217,7 +264,6 @@ exports.updateMyCampaign = [
       const b = req.body || {};
       const files = req.files || {};
 
-      // keep_image_urls có thể gửi nhiều dòng → luôn về array
       const keep = []
         .concat(b.keep_image_urls || [])
         .flat()
@@ -239,9 +285,7 @@ exports.updateMyCampaign = [
       if (b.start_date) update.start_date = b.start_date;
       if (b.end_date) update.end_date = b.end_date;
 
-      if (cover) {
-        update.image_url = `/uploads/campaigns/${cover.filename}`;
-      }
+      if (cover) update.image_url = `/uploads/campaigns/${cover.filename}`;
 
       if (keep.length || galleryFiles.length) {
         update._keep_gallery = keep;
@@ -309,7 +353,109 @@ exports.getCampaignStats = [
   },
 ];
 
-// ============== FINANCIAL REPORTS ==============
+/* ======================= APPROVE / REJECT CHARITY ======================= */
+/**
+ * PUT /api/charities/:id/status
+ * Body: { "status": "approved" | "verified" | "rejected", "rejection_reason"?: string }
+ */
+exports.updateCharityStatus = async (req, res, next) => {
+  const { id } = req.params; // charity_id
+  const { status, rejection_reason } = req.body;
+
+  const normalized =
+    status === 'approved' ? 'verified'
+    : status === 'verified' ? 'verified'
+    : status === 'rejected' ? 'rejected'
+    : null;
+
+  if (!normalized) {
+    return res.status(400).json({ status: 'fail', message: 'Trạng thái không hợp lệ' });
+  }
+
+  const t = await sequelize.transaction();
+  try {
+    logger.info(`[APPROVE] Start update charity status: charity_id=${id}, to=${normalized}`);
+
+    // 1) Lấy charity + user (lock trong transaction)
+    const charity = await Charity.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
+    if (!charity) {
+      await t.rollback();
+      return res.status(404).json({ status: 'fail', message: 'Không tìm thấy tổ chức' });
+    }
+    const user = await User.findByPk(charity.user_id, { transaction: t, lock: t.LOCK.UPDATE });
+    if (!user) {
+      await t.rollback();
+      return res.status(404).json({ status: 'fail', message: 'Không tìm thấy user của tổ chức' });
+    }
+
+    // 2) Cập nhật trạng thái tổ chức + role user
+    if (normalized === 'verified') {
+      await charity.update(
+        {
+          verification_status: 'verified',
+          verified_at: new Date(),
+          verified_by: req.user?.user_id || 'admin',
+          rejection_reason: null,
+        },
+        { transaction: t }
+      );
+
+      if (user.role !== 'charity') {
+        await user.update({ role: 'charity' }, { transaction: t });
+      }
+    } else {
+      await charity.update(
+        {
+          verification_status: 'rejected',
+          verified_at: null,
+          verified_by: req.user?.user_id || 'admin',
+          rejection_reason: rejection_reason || null,
+        },
+        { transaction: t }
+      );
+    }
+
+    // 3) Tạo notification TRONG transaction (atomic)
+    const notiPayload =
+      normalized === 'verified'
+        ? {
+            user_id: String(user.user_id),
+            title: 'Đơn đăng ký hội viên được duyệt',
+            content: 'Chúc mừng! Đơn đăng ký trở thành tổ chức từ thiện của bạn đã được duyệt.',
+            type: 'system',
+            is_read: false,
+            created_at: new Date(),
+          }
+        : {
+            user_id: String(user.user_id),
+            title: 'Đơn đăng ký bị từ chối',
+            content: `Rất tiếc, đơn đăng ký đã bị từ chối.${rejection_reason ? ` Lý do: ${rejection_reason}.` : ''}`,
+            type: 'system',
+            is_read: false,
+            created_at: new Date(),
+          };
+
+    logger.info(`[APPROVE] Will create notification for user_id=${user.user_id}, status=${normalized}`);
+    const createdNoti = await Notification.create(notiPayload, { transaction: t });
+    logger.info(`[APPROVE] Notification created in TX: ${createdNoti?.noti_id}`);
+
+    // 4) Commit
+    await t.commit();
+    logger.info(`[APPROVE] Charity updated & notification committed. user_id=${user.user_id}`);
+
+    return res.json({
+      status: 'success',
+      message: `Đã cập nhật trạng thái: ${normalized}`,
+      notification_id: createdNoti?.noti_id,
+    });
+  } catch (err) {
+    try { await t.rollback(); } catch {}
+    logger.error('Lỗi duyệt charity:', err);
+    return next(err);
+  }
+};
+
+/* ======================= FINANCIAL REPORTS ======================= */
 
 exports.createFinancialReport = [
   requireCharityOwnership,
@@ -441,7 +587,7 @@ exports.getFinancialOverview = [
   },
 ];
 
-// ============== PUBLIC ENDPOINTS ==============
+/* ======================= PUBLIC ENDPOINTS ======================= */
 
 exports.getAllCharities = async (req, res, next) => {
   try {
@@ -461,7 +607,7 @@ exports.getCharityById = async (req, res, next) => {
   }
 };
 
-// ============== DOCUMENT UPLOAD ==============
+/* ======================= DOCUMENT UPLOAD ======================= */
 
 exports.uploadDocument = [
   requireCharityOwnership,

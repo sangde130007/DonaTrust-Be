@@ -195,7 +195,7 @@ app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true); 
     const allowedOrigins = [
-      'http://localhost:5173', 
+      'http://localhost:4028', 
       'https://donatrust.info.vn'
     ];
     if (allowedOrigins.includes(origin)) {

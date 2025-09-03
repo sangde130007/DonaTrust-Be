@@ -1,3 +1,4 @@
+// src/services/charityService.js
 const Charity = require('../models/Charity');
 const User = require('../models/User');
 const Campaign = require('../models/Campaign');
@@ -6,6 +7,9 @@ const { AppError } = require('../utils/errorHandler');
 const { Op } = require('sequelize');
 const sequelize = require('../config/database');
 const logger = require('../utils/logger');
+
+/* ========== Helpers ========== */
+const str = (v) => (typeof v === 'string' ? v.trim() : v);
 
 exports.create = async (data) => {
   const charity = await Charity.create(data);
@@ -40,8 +44,9 @@ exports.delete = async (id) => {
  * - Không yêu cầu user đã có role 'charity'
  * - Tạo Charity với verification_status = 'pending'
  * - Chặn nộp trùng theo user_id
+ * - Map license_url -> license_document để Admin xem được link
  */
-exports.registerCharity = async (userId, charityData) => {
+exports.registerCharity = async (userId, charityData = {}) => {
   const user = await User.findByPk(userId);
   if (!user) throw new AppError('Không tìm thấy người dùng', 404);
 
@@ -52,19 +57,76 @@ exports.registerCharity = async (userId, charityData) => {
   }
 
   // Kiểm tra license_number unique (nếu có)
-  if (charityData.license_number) {
-    const existingLicense = await Charity.findOne({
-      where: { license_number: charityData.license_number },
+  if (str(charityData.license_number)) {
+    const existed = await Charity.findOne({
+      where: { license_number: str(charityData.license_number) },
     });
-    if (existingLicense) {
+    if (existed) {
       throw new AppError('Số giấy phép này đã được sử dụng', 400);
     }
   }
 
+  // Chuẩn hoá field vào DB
+  const name = str(charityData.name);
+  const description = str(charityData.description);
+  const mission = str(charityData.mission);
+  const address = str(charityData.address);
+  const city = str(charityData.city);
+  const phone = str(charityData.phone);
+  const email = str(charityData.email);
+  const website_url = str(charityData.website_url);
+  const license_number = str(charityData.license_number);
+
+  // Map URL file (controller đã build absolute/relative hợp lệ)
+  const license_url = str(charityData.license_url) || str(charityData.license_document) || null;
+  const description_url = str(charityData.description_url) || str(charityData.description_document) || null;
+  const logo_url = str(charityData.logo_url) || null;
+
+  // verification_documents (JSON) – lưu thêm record để tham khảo sau này
+  const verification_documents = [];
+  if (license_url) {
+    verification_documents.push({
+      id: Date.now().toString() + '_license',
+      type: 'license',
+      url: license_url,
+      uploaded_at: new Date().toISOString(),
+    });
+  }
+  if (description_url) {
+    verification_documents.push({
+      id: Date.now().toString() + '_description',
+      type: 'description',
+      url: description_url,
+      uploaded_at: new Date().toISOString(),
+    });
+  }
+
   const charity = await Charity.create({
     user_id: userId,
+    name,
+    description,
+    mission,
+    license_number,
+    address,
+    city,
+    phone,
+    email,
+    website_url,
+
+    // Trạng thái
     verification_status: 'pending',
-    ...charityData,
+    rejection_reason: null,
+
+    // Lưu đường dẫn tài liệu để Admin mở nhanh
+    license_document: license_url || null,
+    // nếu model có cột riêng cho mô tả tài liệu, map vào đây; nếu không có, vẫn giữ trong verification_documents
+    description_document: description_url || null,
+
+    // Logo (nếu model có cột này)
+    logo_url: logo_url || null,
+
+    // Lưu JSON minh chứng
+    verification_documents: verification_documents.length ? verification_documents : [],
   });
 
   logger.info(`Charity registered (pending): ${charity.name} by user ${userId}`);
@@ -87,29 +149,41 @@ exports.getMyCharity = async (userId) => {
     ],
   });
 
-  // khác với bản cũ: KHÔNG throw 404, mà trả về null cho controller
   return charity || null;
 };
 
 /**
  * Cập nhật thông tin charity của chính user
+ * - Map license_url -> license_document nếu FE gửi theo dạng mới
  */
-exports.updateMyCharity = async (userId, updateData) => {
+exports.updateMyCharity = async (userId, updateData = {}) => {
   const charity = await Charity.findOne({ where: { user_id: userId } });
   if (!charity) throw new AppError('Không tìm thấy tổ chức từ thiện', 404);
 
-  // Kiểm tra license_number unique nếu có thay đổi
-  if (updateData.license_number && updateData.license_number !== charity.license_number) {
-    const existingLicense = await Charity.findOne({
+  // Check license_number unique nếu thay đổi
+  if (
+    str(updateData.license_number) &&
+    str(updateData.license_number) !== str(charity.license_number)
+  ) {
+    const existed = await Charity.findOne({
       where: {
-        license_number: updateData.license_number,
+        license_number: str(updateData.license_number),
         charity_id: { [Op.ne]: charity.charity_id },
       },
     });
-    if (existingLicense) throw new AppError('Số giấy phép này đã được sử dụng', 400);
+    if (existed) throw new AppError('Số giấy phép này đã được sử dụng', 400);
   }
 
-  await charity.update(updateData);
+  // Map các URL mới (nếu FE gửi)
+  const patched = { ...updateData };
+  if (str(updateData.license_url)) {
+    patched.license_document = str(updateData.license_url);
+  }
+  if (str(updateData.description_url)) {
+    patched.description_document = str(updateData.description_url);
+  }
+
+  await charity.update(patched);
   logger.info(`Charity updated: ${charity.name} by user ${userId}`);
   return charity;
 };
@@ -148,7 +222,7 @@ exports.verifyCharity = async (charityId, { status, rejection_reason, admin_id }
       await charity.update(
         {
           verification_status: 'rejected',
-          rejection_reason: rejection_reason || 'Không đạt yêu cầu',
+          rejection_reason: str(rejection_reason) || 'Không đạt yêu cầu',
           verified_at: null,
           verified_by: null,
         },
@@ -174,7 +248,7 @@ exports.getAllCharities = async (filters = {}) => {
     search,
     verification_status = 'verified',
     city,
-    category, // hiện chưa dùng, để sẵn nếu sau này có phân loại
+    category, // để sẵn nếu sau này có
     sort = 'created_at',
     order = 'DESC',
   } = filters;
@@ -204,7 +278,7 @@ exports.getAllCharities = async (filters = {}) => {
     attributes: { exclude: ['bank_account', 'verification_documents'] },
     limit: parseInt(limit),
     offset: parseInt(offset),
-    order: [[sort, order.toUpperCase()]],
+    order: [[sort, String(order).toUpperCase()]],
   });
 
   return {
@@ -267,14 +341,17 @@ exports.deleteCharity = async (charityId, userId, userRole) => {
 /**
  * Upload tài liệu cho charity
  */
-exports.uploadDocument = async (userId, file, documentData) => {
+exports.uploadDocument = async (userId, file, documentData = {}) => {
   if (!file) throw new AppError('Không có file được upload', 400);
 
   const charity = await Charity.findOne({ where: { user_id: userId } });
   if (!charity) throw new AppError('Bạn chưa đăng ký tổ chức từ thiện', 404);
 
   const documentUrl = `/uploads/documents/${file.filename}`;
-  const currentDocuments = charity.verification_documents || [];
+  const currentDocuments = Array.isArray(charity.verification_documents)
+    ? charity.verification_documents
+    : [];
+
   const newDocument = {
     id: Date.now().toString(),
     filename: file.filename,
