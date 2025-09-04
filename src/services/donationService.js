@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const payosConfig = require('../config/payos');
 const QRCode = require('qrcode');
 const sequelize = require('../config/database');
-
+const { getIO } = require('../socketHub');
 const payos = new PayOS(payosConfig.clientId, payosConfig.apiKey, payosConfig.checksumKey);
 
 function createSignatureData(obj) {
@@ -147,7 +147,27 @@ exports.handlePayOSWebhook = async (webhookData) => {
 
       await campaignRecord.update({ current_amount: newAmount }, { transaction: t });
       logger.info(`Updated campaign ${campaignRecord.title}: ${oldAmount} + ${added} = ${newAmount}, tx_code: ${orderCode}`);
-    } else {
+
+      // === CHỖ CHÚNG TA EMIT SOCKET: chèn vào đây ===
+      try {
+        const io = getIO(); // sẽ ném nếu socket chưa được set
+        io.to(`campaign_${donation.campaign_id}`).emit('donation:completed', {
+          campaign_id: donation.campaign_id,
+          donation_id: donation.donation_id || donation.id || null,
+          tx_code: orderCode,
+          amount: added,
+          new_amount: newAmount,
+          status: newStatus,
+          timestamp: new Date().toISOString(),
+        });
+        logger.info('Emitted donation:completed to room', `campaign_${donation.campaign_id}`);
+      } catch (emitErr) {
+        // Không crash transaction nếu emit lỗi — chỉ log
+        logger.warn('Không emit được socket event (có thể chưa setIO):', emitErr && emitErr.message);
+      }
+      // === end emit ===
+
+    }  else {
       logger.info(`No campaign update needed for tx_code: ${orderCode}`);
     }
   });

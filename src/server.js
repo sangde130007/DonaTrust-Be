@@ -224,12 +224,24 @@ const io = new Server(server, {
     credentials: true, // có thể bật true; do dùng server.listen
   }
 });
-const { setIO } = require('./socketHub');
-setIO(io);
 // Handle socket connections
 io.on('connection', (socket) => {
   handleSocketConnection(io, socket);
+
+  // Join campaign room
+  socket.on('join_campaign', (roomId) => {
+    socket.join(roomId);
+    console.log(`✅ ${socket.id} joined ${roomId}`);
+  });
+
+  // Leave campaign room
+  socket.on('leave_campaign', (roomId) => {
+    socket.leave(roomId);
+    console.log(`🚪 ${socket.id} left ${roomId}`);
+  });
 });
+
+
 
 // API Documentation
 app.use(
