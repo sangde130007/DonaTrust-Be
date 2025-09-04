@@ -287,15 +287,19 @@ exports.getDonationHistory = async (req, res) => {
       offset,
       limit: parseInt(limit),
       order: [['created_at', 'DESC']],
-      attributes: ['donation_id', 'campaign_id', 'amount', 'message', 'is_anonymous', 'status', 'created_at', 'email', 'full_name'], // Chỉ lấy các cột cần thiết
+      attributes: ['donation_id', 'campaign_id', 'amount', 'message', 'is_anonymous', 'status', 'created_at', 'email', 'full_name'],
     });
 
     const donations = rows.map(donation => ({
-      name: donation.is_anonymous ? null : donation.full_name || 'Khách',
-      email: donation.is_anonymous ? null : donation.email || null,
+      donation_id: donation.donation_id,
+      campaign_id: donation.campaign_id,
+      amount: Number(donation.amount) || 0, // Trả về số
       message: donation.message || 'Không có lời chúc',
-      amount: donation.amount.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + ' VND',
-      created_at: donation.created_at.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+      is_anonymous: donation.is_anonymous || false,
+      status: donation.status || 'unknown',
+      created_at: donation.created_at ? donation.created_at.toISOString() : new Date().toISOString(), // Chuẩn ISO 8601
+      name: donation.is_anonymous ? null : (donation.full_name || null),
+      email: donation.is_anonymous ? null : (donation.email || null),
     }));
 
     const totalPages = Math.ceil(count / limit);
@@ -311,3 +315,4 @@ exports.getDonationHistory = async (req, res) => {
     throw new AppError('Không thể lấy lịch sử quyên góp', 500);
   }
 };
+
