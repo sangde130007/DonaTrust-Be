@@ -227,7 +227,13 @@ const getActiveChatRooms = async (req, res) => {
  */
 const handleSocketConnection = (io, socket) => {
   logger.info(`New socket connection: ${socket.id}`);
+  const uid = socket.handshake?.auth?.userId || socket.handshake?.query?.userId;
+  if (uid) socket.join(String(uid));
 
+  // Dự phòng: FE có thể gửi sau khi đăng nhập
+  socket.on('auth:hello', ({ userId }) => {
+    if (userId) socket.join(String(userId));
+  });
   // Join room event
   socket.on('join-room', async ({ roomId, userId, userToken }) => {
     try {

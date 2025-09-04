@@ -2,6 +2,7 @@
 const { Op } = require('sequelize');
 const Notification = require('../models/Notification');
 const { AppError } = require('../utils/errorHandler');
+const { getIO } = require('../socketHub');
 
 /* ===================== Helpers ===================== */
 function buildFilters({ search, type, is_read }) {
@@ -50,7 +51,22 @@ exports.getAll = async (opts = {}) => {
     totalPages: Math.ceil(count / limit),
   };
 };
-
+exports.createAndEmit = async (data, options = {}) => {
+  const noti = await Notification.create(data, options);
+  const io = getIO(); // hoặc options.io nếu bạn truyền vào
+  if (io && data.user_id) {
+    io.to(String(data.user_id)).emit('notification:new', {
+      noti_id: noti.noti_id,
+      title: noti.title,
+      content: noti.content,
+      type: noti.type,
+      is_read: noti.is_read,
+      campaign_id: noti.campaign_id || null,
+      created_at: noti.created_at,
+    });
+  }
+  return noti;
+};
 /* ===================== By User ===================== */
 exports.getForUser = async (userId, opts = {}) => {
   const { page, limit } = buildPaging(opts);

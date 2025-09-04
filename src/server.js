@@ -224,7 +224,8 @@ const io = new Server(server, {
     credentials: true, // có thể bật true; do dùng server.listen
   }
 });
-
+const { setIO } = require('./socketHub');
+setIO(io);
 // Handle socket connections
 io.on('connection', (socket) => {
   handleSocketConnection(io, socket);
@@ -262,7 +263,7 @@ app.use('/api', routes);
 
 // Error handling middleware
 app.use(errorMiddleware);
-
+app.set('io', io);
 // Database connection and server start
 sequelize
   .authenticate()
