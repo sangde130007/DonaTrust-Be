@@ -14,6 +14,7 @@ const adminRoutes = require('./admin'); // ⬅️ admin router tổng
 const newsRoutes = require('./news');
 const daoRoutes = require('./dao');
 const chatRoutes = require('./chat');
+const payosRoutes = require('./payos');
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
@@ -29,5 +30,6 @@ router.use('/news', newsRoutes);
 router.use('/dao', daoRoutes);
 router.use('/chat', chatRoutes);
 router.use('/', notificationRoutes);
+router.use('/payos', payosRoutes);
 
 module.exports = router;

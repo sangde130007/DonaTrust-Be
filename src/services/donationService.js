@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const payosConfig = require('../config/payos');
 const QRCode = require('qrcode');
 const sequelize = require('../config/database');
-
+const { getIO } = require('../socketHub');
 const payos = new PayOS(payosConfig.clientId, payosConfig.apiKey, payosConfig.checksumKey);
 
 function createSignatureData(obj) {
@@ -147,7 +147,27 @@ exports.handlePayOSWebhook = async (webhookData) => {
 
       await campaignRecord.update({ current_amount: newAmount }, { transaction: t });
       logger.info(`Updated campaign ${campaignRecord.title}: ${oldAmount} + ${added} = ${newAmount}, tx_code: ${orderCode}`);
-    } else {
+
+      // === CHỖ CHÚNG TA EMIT SOCKET: chèn vào đây ===
+      try {
+        const io = getIO(); // sẽ ném nếu socket chưa được set
+        io.to(`campaign_${donation.campaign_id}`).emit('donation:completed', {
+          campaign_id: donation.campaign_id,
+          donation_id: donation.donation_id || donation.id || null,
+          tx_code: orderCode,
+          amount: added,
+          new_amount: newAmount,
+          status: newStatus,
+          timestamp: new Date().toISOString(),
+        });
+        logger.info('Emitted donation:completed to room', `campaign_${donation.campaign_id}`);
+      } catch (emitErr) {
+        // Không crash transaction nếu emit lỗi — chỉ log
+        logger.warn('Không emit được socket event (có thể chưa setIO):', emitErr && emitErr.message);
+      }
+      // === end emit ===
+
+    }  else {
       logger.info(`No campaign update needed for tx_code: ${orderCode}`);
     }
   });
@@ -287,15 +307,19 @@ exports.getDonationHistory = async (req, res) => {
       offset,
       limit: parseInt(limit),
       order: [['created_at', 'DESC']],
-      attributes: ['donation_id', 'campaign_id', 'amount', 'message', 'is_anonymous', 'status', 'created_at', 'email', 'full_name'], // Chỉ lấy các cột cần thiết
+      attributes: ['donation_id', 'campaign_id', 'amount', 'message', 'is_anonymous', 'status', 'created_at', 'email', 'full_name'],
     });
 
     const donations = rows.map(donation => ({
-      name: donation.is_anonymous ? null : donation.full_name || 'Khách',
-      email: donation.is_anonymous ? null : donation.email || null,
+      donation_id: donation.donation_id,
+      campaign_id: donation.campaign_id,
+      amount: Number(donation.amount) || 0, // Trả về số
       message: donation.message || 'Không có lời chúc',
-      amount: donation.amount.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + ' VND',
-      created_at: donation.created_at.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+      is_anonymous: donation.is_anonymous || false,
+      status: donation.status || 'unknown',
+      created_at: donation.created_at ? donation.created_at.toISOString() : new Date().toISOString(), // Chuẩn ISO 8601
+      name: donation.is_anonymous ? null : (donation.full_name || null),
+      email: donation.is_anonymous ? null : (donation.email || null),
     }));
 
     const totalPages = Math.ceil(count / limit);
@@ -311,3 +335,4 @@ exports.getDonationHistory = async (req, res) => {
     throw new AppError('Không thể lấy lịch sử quyên góp', 500);
   }
 };
+
