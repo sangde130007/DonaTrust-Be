@@ -224,6 +224,7 @@ const io = new Server(server, {
     credentials: true, // có thể bật true; do dùng server.listen
   }
 });
+
 // Handle socket connections
 io.on('connection', (socket) => {
   handleSocketConnection(io, socket);
@@ -269,6 +270,11 @@ app.get('/', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
   });
 });
+
+// Webhook routes (PayOS)
+const payosRoutes = require('./routes/payos');
+app.use('/api/webhook/payos', payosRoutes);
+
 
 // API routes
 app.use('/api', routes);

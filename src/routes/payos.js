@@ -3,7 +3,7 @@ const router = express.Router();
 const donationService = require('../services/donationService'); // <-- đường dẫn theo repo của bạn
 
 // PayOS sẽ POST webhook payload ở đây
-router.post('/webhook', express.json(), async (req, res) => {
+router.post('/', express.json(), async (req, res) => {
   try {
     const result = await donationService.handlePayOSWebhook(req.body);
     return res.status(200).json(result || { message: 'ok' });
