@@ -273,7 +273,8 @@ app.get('/', (req, res) => {
 
 // Webhook routes (PayOS)
 const payosRoutes = require('./routes/payos');
-app.use('/api/webhook/payos', payosRoutes);
+app.use('/api/donations/webhook', payosRoutes);
+
 
 
 // API routes
