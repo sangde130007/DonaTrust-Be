@@ -172,6 +172,17 @@ const Campaign = sequelize.define(
           campaign.dao_approval_status = 'dao_pending';
         }
       },
+        beforeSave: (campaign) => {
+    const goal = campaign.goal_amount != null ? Number(campaign.goal_amount) : 0;
+    const curr = campaign.current_amount != null ? Number(campaign.current_amount) : 0;
+
+    if (goal > 0) {
+      const progress = curr / goal;
+      if (progress >= 0.5 && !campaign.featured) {
+        campaign.featured = true; // chỉ bật, không tự tắt nếu < 50%
+      }
+    }
+  },
       beforeUpdate: (campaign) => {
         campaign.updated_at = new Date();
       },
