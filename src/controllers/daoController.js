@@ -9,6 +9,17 @@ const validate = require('../middleware/validationMiddleware');
  *   description: API quản lý DAO voting system
  */
 
+// ==== AUTHZ GUARDS ====
+const ensureAuthenticated = (req, res, next) => {
+  if (!req.user?.user_id) return res.status(401).json({ message: 'Unauthorized' });
+  next();
+};
+
+const ensureDaoMember = (req, res, next) => {
+  if (req.user?.role === 'dao') return next();
+  return res.status(403).json({ message: 'Forbidden: chỉ thành viên DAO' });
+};
+
 class DAOController {
   /**
    * @swagger
@@ -19,14 +30,18 @@ class DAOController {
    *     security:
    *       - bearerAuth: []
    */
-  getPendingCampaigns = async (req, res, next) => {
-    try {
-      const result = await daoService.getPendingCampaigns(req.query);
-      res.json(result);
-    } catch (error) {
-      next(error);
-    }
-  };
+  getPendingCampaigns = [
+    ensureAuthenticated,
+    ensureDaoMember,
+    async (req, res, next) => {
+      try {
+        const result = await daoService.getPendingCampaigns(req.query);
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  ];
 
   /**
    * @swagger
@@ -37,14 +52,18 @@ class DAOController {
    *     security:
    *       - bearerAuth: []
    */
-  getCampaignDetail = async (req, res, next) => {
-    try {
-      const campaign = await daoService.getCampaignDetail(req.params.id, req.user.user_id);
-      res.json(campaign);
-    } catch (error) {
-      next(error);
-    }
-  };
+  getCampaignDetail = [
+    ensureAuthenticated,
+    ensureDaoMember,
+    async (req, res, next) => {
+      try {
+        const campaign = await daoService.getCampaignDetail(req.params.id, req.user.user_id);
+        res.json(campaign);
+      } catch (error) {
+        next(error);
+      }
+    },
+  ];
 
   /**
    * @swagger
@@ -56,6 +75,8 @@ class DAOController {
    *       - bearerAuth: []
    */
   voteCampaign = [
+    ensureAuthenticated,
+    ensureDaoMember,
     check('decision')
       .isIn(['approve', 'reject'])
       .withMessage('Decision phải là approve hoặc reject'),
@@ -73,12 +94,12 @@ class DAOController {
         );
         res.status(201).json({
           message: 'Vote thành công',
-          vote
+          vote,
         });
       } catch (error) {
         next(error);
       }
-    }
+    },
   ];
 
   /**
@@ -90,32 +111,40 @@ class DAOController {
    *     security:
    *       - bearerAuth: []
    */
-  getStats = async (req, res, next) => {
-    try {
-      const stats = await daoService.getDAOStats();
-      res.json(stats);
-    } catch (error) {
-      next(error);
-    }
-  };
+  getStats = [
+    ensureAuthenticated,
+    ensureDaoMember,
+    async (req, res, next) => {
+      try {
+        const stats = await daoService.getDAOStats();
+        res.json(stats);
+      } catch (error) {
+        next(error);
+      }
+    },
+  ];
 
   /**
    * @swagger
    * /api/dao/campaigns/dao-approved:
    *   get:
-   *     summary: Lấy danh sách campaigns đã được DAO approve (cho admin)
+   *     summary: Lấy danh sách campaigns đã được DAO approve
    *     tags: [DAO Management]
    *     security:
    *       - bearerAuth: []
    */
-  getDAOApprovedCampaigns = async (req, res, next) => {
-    try {
-      const campaigns = await daoService.getDAOApprovedCampaigns();
-      res.json(campaigns);
-    } catch (error) {
-      next(error);
-    }
-  };
+  getDAOApprovedCampaigns = [
+    ensureAuthenticated,
+    ensureDaoMember,
+    async (req, res, next) => {
+      try {
+        const campaigns = await daoService.getDAOApprovedCampaigns();
+        res.json(campaigns);
+      } catch (error) {
+        next(error);
+      }
+    },
+  ];
 
   /**
    * @swagger
@@ -126,14 +155,18 @@ class DAOController {
    *     security:
    *       - bearerAuth: []
    */
-  getDAORejectedCampaigns = async (req, res, next) => {
-    try {
-      const campaigns = await daoService.getDAORejectedCampaigns();
-      res.json(campaigns);
-    } catch (error) {
-      next(error);
-    }
-  };
+  getDAORejectedCampaigns = [
+    ensureAuthenticated,
+    ensureDaoMember,
+    async (req, res, next) => {
+      try {
+        const campaigns = await daoService.getDAORejectedCampaigns();
+        res.json(campaigns);
+      } catch (error) {
+        next(error);
+      }
+    },
+  ];
 
   /**
    * @swagger
@@ -144,14 +177,18 @@ class DAOController {
    *     security:
    *       - bearerAuth: []
    */
-  getMyVotes = async (req, res, next) => {
-    try {
-      const votes = await daoService.getMyVotes(req.user.user_id, req.query);
-      res.json(votes);
-    } catch (error) {
-      next(error);
-    }
-  };
+  getMyVotes = [
+    ensureAuthenticated,
+    ensureDaoMember,
+    async (req, res, next) => {
+      try {
+        const votes = await daoService.getMyVotes(req.user.user_id, req.query);
+        res.json(votes);
+      } catch (error) {
+        next(error);
+      }
+    },
+  ];
 
   /**
    * @swagger
@@ -162,14 +199,18 @@ class DAOController {
    *     security:
    *       - bearerAuth: []
    */
-  getMyVoteStatistics = async (req, res, next) => {
-    try {
-      const stats = await daoService.getMyVoteStatistics(req.user.user_id);
-      res.json(stats);
-    } catch (error) {
-      next(error);
-    }
-  };
+  getMyVoteStatistics = [
+    ensureAuthenticated,
+    ensureDaoMember,
+    async (req, res, next) => {
+      try {
+        const stats = await daoService.getMyVoteStatistics(req.user.user_id);
+        res.json(stats);
+      } catch (error) {
+        next(error);
+      }
+    },
+  ];
 }
 
 module.exports = new DAOController();
