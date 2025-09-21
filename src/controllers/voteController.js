@@ -9,7 +9,7 @@ const ensureAuthenticated = (req, res, next) => {
 };
 
 const ensureDaoMember = (req, res, next) => {
-  if (req.user?.role === 'dao') return next();
+  if (req.user?.role === 'dao_member') return next();
   return res.status(403).json({ message: 'Forbidden: chỉ thành viên DAO' });
 };
 
@@ -39,7 +39,6 @@ exports.create = [
 // Cho phép DAO member xem danh sách vote (nếu muốn giới hạn hơn có thể lọc theo self).
 exports.getAll = [
   ensureAuthenticated,
-  ensureDaoMember,
   async (req, res, next) => {
     try {
       const votes = await voteService.getAll();
@@ -53,7 +52,6 @@ exports.getAll = [
 /* ========= READ ONE ========= */
 exports.getById = [
   ensureAuthenticated,
-  ensureDaoMember,
   async (req, res, next) => {
     try {
       const vote = await voteService.getById(req.params.id);
@@ -68,7 +66,6 @@ exports.getById = [
 // Chỉ DAO member & chỉ sửa phiếu của chính mình.
 exports.update = [
   ensureAuthenticated,
-  ensureDaoMember,
   check('vote_weight').optional().isInt({ min: 1 }).withMessage('Trọng số phiếu bầu phải lớn hơn 0'),
   validate,
   async (req, res, next) => {
@@ -92,7 +89,6 @@ exports.update = [
 // Chỉ DAO member & chỉ xoá phiếu của chính mình.
 exports.delete = [
   ensureAuthenticated,
-  ensureDaoMember,
   async (req, res, next) => {
     try {
       // Tương tự: để service kiểm tra chủ sở hữu trước khi xoá

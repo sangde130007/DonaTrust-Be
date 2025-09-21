@@ -16,7 +16,7 @@ const ensureAuthenticated = (req, res, next) => {
 };
 
 const ensureDaoMember = (req, res, next) => {
-  if (req.user?.role === 'dao') return next();
+  if (req.user?.role === 'dao_member') return next();
   return res.status(403).json({ message: 'Forbidden: chỉ thành viên DAO' });
 };
 
