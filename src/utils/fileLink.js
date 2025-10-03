@@ -4,8 +4,16 @@ const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
 export const toAbsoluteFileUrl = (u) => {
   if (!u) return '';
   let s = String(u).trim().replace(/\\/g, '/');
+  
+  // Full URL (including Cloudinary URLs)
   if (/^https?:\/\//i.test(s)) return s;
-  if (!s.startsWith('/')) s = `/uploads/${s}`;     // tên file trơ -> coi là /uploads/...
+  
+  // Legacy local paths (for backward compatibility)
+  if (s.startsWith('/uploads/')) return `${API_ORIGIN}${s}`;
+  
+  // Relative paths - assume they need API origin
+  if (!s.startsWith('/')) s = `/uploads/${s}`;
+  
   return `${API_ORIGIN}${s}`;
 };
 

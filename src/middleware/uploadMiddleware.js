@@ -2,6 +2,16 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { AppError } = require('../utils/errorHandler');
+const { 
+  cloudinary,
+  uploadAvatar: cloudinaryUploadAvatar,
+  uploadCampaign: cloudinaryUploadCampaign,
+  uploadCertificate: cloudinaryUploadCertificate,
+  uploadDocument: cloudinaryUploadDocument,
+  uploadReport: cloudinaryUploadReport,
+  uploadUpdate: cloudinaryUploadUpdate
+} = require('../config/cloudinary');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 /* ============ Ensure upload directories exist ============ */
 const ensureUploadDirs = () => {
@@ -175,19 +185,51 @@ const createUpdatesUpload = () =>
   multer({ storage: createUpdatesStorage(), fileFilter: imageFileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
 
 /* ============ Middleware instances ============ */
-const uploadAvatar = createAvatarUpload().single('avatar');
-const uploadCampaignImages = createCampaignUpload().array('images', 10);
-const uploadCampaignSingleImage = createCampaignUpload().single('image');
-const uploadQrImage = createCampaignUpload().single('qr_image');
+// Cloudinary uploads
+const uploadAvatar = cloudinaryUploadAvatar.single('avatar');
+const uploadCampaignImages = cloudinaryUploadCampaign.array('images', 10);
+const uploadCampaignSingleImage = cloudinaryUploadCampaign.single('image');
+const uploadQrImage = cloudinaryUploadCampaign.single('qr_image');
 
-const uploadDocument = createDocumentUpload().single('document');
-const uploadCertificates = createCertificateUpload().array('certificates', 5);
-const uploadReport = createReportUpload().single('report');
-const uploadReportFiles = createReportUpload().array('evidence_files', 5);
-const uploadUpdateImages = createUpdatesUpload().array('images', 10);
+const uploadDocument = cloudinaryUploadDocument.single('document');
+const uploadCertificates = cloudinaryUploadCertificate.array('certificates', 5);
+const uploadReport = cloudinaryUploadReport.single('report');
+const uploadReportFiles = cloudinaryUploadReport.array('evidence_files', 5);
+const uploadUpdateImages = cloudinaryUploadUpdate.array('images', 10);
+
+// Fallback local uploads (for development or when Cloudinary is not available)
+const uploadAvatarLocal = createAvatarUpload().single('avatar');
+const uploadCampaignImagesLocal = createCampaignUpload().array('images', 10);
+const uploadCampaignSingleImageLocal = createCampaignUpload().single('image');
+const uploadQrImageLocal = createCampaignUpload().single('qr_image');
+
+const uploadDocumentLocal = createDocumentUpload().single('document');
+const uploadCertificatesLocal = createCertificateUpload().array('certificates', 5);
+const uploadReportLocal = createReportUpload().single('report');
+const uploadReportFilesLocal = createReportUpload().array('evidence_files', 5);
+const uploadUpdateImagesLocal = createUpdatesUpload().array('images', 10);
 
 /* ===== Instance: upload cho Charity Registration ===== */
-const uploadCharityRegistration = createCharityRegistrationUpload().fields([
+// Use Cloudinary for charity registration
+const uploadCharityRegistration = multer({
+  storage: new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+      folder: 'donatrust/charity-registration',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx'],
+      transformation: [
+        { quality: 'auto' }
+      ],
+      public_id: (req, file) => {
+        const timestamp = Date.now();
+        const randomString = Math.random().toString(36).substring(2, 8);
+        return `charity_${file.fieldname}_${timestamp}_${randomString}`;
+      }
+    }
+  }),
+  fileFilter: charityRegistrationFileFilter,
+  limits: { fileSize: 20 * 1024 * 1024 },
+}).fields([
   { name: 'license', maxCount: 1 },
   { name: 'description', maxCount: 1 },
   { name: 'logo', maxCount: 1 },
@@ -212,7 +254,7 @@ const handleMulterError = (err, req, res, next) => {
 };
 
 module.exports = {
-  // single-use middlewares
+  // Cloudinary uploads (primary)
   uploadAvatar,
   uploadCampaignImages,
   uploadCampaignSingleImage,
@@ -222,6 +264,17 @@ module.exports = {
   uploadReport,
   uploadUpdateImages,
   uploadReportFiles,
+
+  // Local uploads (fallback)
+  uploadAvatarLocal,
+  uploadCampaignImagesLocal,
+  uploadCampaignSingleImageLocal,
+  uploadQrImageLocal,
+  uploadDocumentLocal,
+  uploadCertificatesLocal,
+  uploadReportLocal,
+  uploadUpdateImagesLocal,
+  uploadReportFilesLocal,
 
   // factories
   createAvatarUpload,

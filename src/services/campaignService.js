@@ -95,7 +95,7 @@ exports.createCampaign = async (userId, campaignData, file) => {
   if (endDate <= startDate) throw new AppError('Ngày kết thúc phải sau ngày bắt đầu', 400);
 
   const qr_code_url = file
-    ? `/uploads/campaigns/${file.filename}`
+    ? file.url // Cloudinary URL
     : (campaignData.qr_code_url?.trim() || null);
 
   // Tạo campaign — set rõ field để tránh ghi bừa
@@ -454,7 +454,7 @@ exports.uploadImage = async (campaignId, file, userId) => {
   });
   if (!campaign) throw new AppError('Không tìm thấy chiến dịch hoặc bạn không có quyền', 404);
 
-  const imageUrl = `/uploads/campaigns/${file.filename}`;
+  const imageUrl = file.url; // Cloudinary URL
   await campaign.update({ image_url: imageUrl });
 
   logger.info(`Campaign image uploaded: ${campaign.title}, file: ${file.filename}`);
@@ -481,7 +481,7 @@ exports.uploadImages = async (campaignId, files, userId) => {
   });
   if (!campaign) throw new AppError('Không tìm thấy chiến dịch hoặc bạn không có quyền', 404);
 
-  const uploadedImages = list.map((f) => `/uploads/campaigns/${f.filename}`);
+  const uploadedImages = list.map((f) => f.url); // Cloudinary URLs
   const currentGallery = Array.isArray(campaign.gallery_images) ? campaign.gallery_images : [];
   const updatedGallery = [...currentGallery, ...uploadedImages];
 

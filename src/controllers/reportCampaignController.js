@@ -23,7 +23,7 @@ exports.createReport = [
       const reporter_id = req.user?.user_id || req.user?.id;
       const { reasons, otherReason, description } = req.body;
       
-      const evidence_files = req.files ? req.files.map(file => `/uploads/reports/${file.filename}`) : [];
+      const evidence_files = req.files ? req.files.map(file => file.url) : []; // Cloudinary URLs
 
       let parsedReasons;
       try {

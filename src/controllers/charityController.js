@@ -16,6 +16,7 @@ const financialReportService = require('../services/financialReportService');
 const validate = require('../middleware/validationMiddleware');
 const { requireCharityOwnership, requireCharity } = require('../middleware/roleMiddleware');
 const { uploadQrImage, uploadDocument, handleMulterError } = require('../middleware/uploadMiddleware');
+const { cleanupOldImage } = require('../utils/cloudinaryHelper');
 
 /* ======================= Helpers ======================= */
 
@@ -40,8 +41,26 @@ const toAbsolute = (req, relPath) => {
 };
 
 /* ============ Multer cho cập nhật campaign (cover, gallery, qr) ============ */
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const { cloudinary } = require('../config/cloudinary');
+
 const uploadCampaignUpdate = multer({
-  dest: path.join(process.cwd(), 'uploads', 'campaigns'),
+  storage: new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+      folder: 'donatrust/campaigns',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+      transformation: [
+        { width: 800, height: 600, crop: 'fill', gravity: 'auto' },
+        { quality: 'auto' }
+      ],
+      public_id: (req, file) => {
+        const timestamp = Date.now();
+        const randomString = Math.random().toString(36).substring(2, 8);
+        return `campaign_update_${file.fieldname}_${timestamp}_${randomString}`;
+      }
+    }
+  }),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
@@ -121,13 +140,10 @@ exports.registerCharity = [
       const descFile    = req.files?.description?.[0] || null;
       const logoFile    = req.files?.logo?.[0] || null;
 
-      const relLicense = licenseFile ? `/uploads/certificates/${licenseFile.filename}` : null;
-      const relDesc    = descFile    ? `/uploads/documents/${descFile.filename}`      : null;
-      const relLogo    = logoFile    ? `/uploads/avatars/${logoFile.filename}`        : null;
-
-      const license_url     = relLicense ? toAbsolute(req, relLicense) : null;
-      const description_url = relDesc    ? toAbsolute(req, relDesc)    : null;
-      const logo_url        = relLogo    ? toAbsolute(req, relLogo)    : null;
+      // With Cloudinary, files already have full URLs
+      const license_url     = licenseFile ? licenseFile.url : null;
+      const description_url = descFile    ? descFile.url    : null;
+      const logo_url        = logoFile    ? logoFile.url    : null;
 
       const payload = {
         ...req.body,
@@ -285,15 +301,15 @@ exports.updateMyCampaign = [
       if (b.start_date) update.start_date = b.start_date;
       if (b.end_date) update.end_date = b.end_date;
 
-      if (cover) update.image_url = `/uploads/campaigns/${cover.filename}`;
+      if (cover) update.image_url = cover.url; // Cloudinary URL
 
       if (keep.length || galleryFiles.length) {
         update._keep_gallery = keep;
-        update._new_gallery = galleryFiles.map(f => `/uploads/campaigns/${f.filename}`);
+        update._new_gallery = galleryFiles.map(f => f.url); // Cloudinary URLs
       }
 
       if (qr) {
-        update.qr_code_url = `/uploads/campaigns/${qr.filename}`;
+        update.qr_code_url = qr.url; // Cloudinary URL
       } else if (b.qr_code_url) {
         update.qr_code_url = b.qr_code_url;
       }

@@ -1,6 +1,7 @@
 const { check } = require('express-validator');
 const userService = require('../services/userService');
 const validate = require('../middleware/validationMiddleware');
+const { cleanupOldImage } = require('../utils/cloudinaryHelper');
 
 /**
  * @swagger
@@ -230,31 +231,25 @@ exports.uploadAvatar = async (req, res, next) => {
       });
     }
 
-    // Validate kiểu file & size như bạn đã có...
-    // ...
+    // Get current user to check for old avatar
+    const currentUser = await userService.getProfile(req.user.user_id);
+    const oldAvatarUrl = currentUser.profile_image;
 
-    // Gọi service để cập nhật DB, service trả về relative path
+    // Gọi service để cập nhật DB với Cloudinary URL
     const result = await userService.uploadAvatar(req.user.user_id, req.file);
-    // result.avatar_url: '/uploads/avatars/xxx.jpg'
-    // result.user.profile_image: '/uploads/avatars/xxx.jpg'
-
-    // Build base URL từ env hoặc từ req
-    const baseUrl =
-      process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
-
-    const toAbsolute = (p) => {
-      if (!p) return p;
-      if (/^https?:\/\//i.test(p)) return p;
-      return `${baseUrl}${p.startsWith('/') ? '' : '/'}${p}`;
-    };
+    
+    // Clean up old avatar from Cloudinary if it exists
+    if (oldAvatarUrl && oldAvatarUrl !== result.avatar_url) {
+      await cleanupOldImage(oldAvatarUrl, result.avatar_url);
+    }
 
     const responsePayload = {
       status: 'success',
       message: 'Avatar uploaded successfully',
-      avatar_url: toAbsolute(result.avatar_url),
+      avatar_url: result.avatar_url, // Already a full Cloudinary URL
       user: {
         ...result.user,
-        profile_image: toAbsolute(result.user?.profile_image),
+        profile_image: result.avatar_url,
       },
     };
 

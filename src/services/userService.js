@@ -5,6 +5,7 @@ const { USER_STATUS } = require('../config/constants');
 const logger = require('../utils/logger');
 const path = require('path');
 const fs = require('fs');
+const { cleanupOldImage } = require('../utils/cloudinaryHelper');
 
 exports.create = async (data) => {
 	const user = await User.create(data);
@@ -101,7 +102,7 @@ exports.changePassword = async (userId, currentPassword, newPassword) => {
 	return { message: 'Đổi mật khẩu thành công' };
 };
 
-// userService.js - uploadAvatar method
+// userService.js - uploadAvatar method with Cloudinary
 exports.uploadAvatar = async (userId, file) => {
 	try {
 		if (!file) {
@@ -115,6 +116,7 @@ exports.uploadAvatar = async (userId, file) => {
 			mimetype: file.mimetype,
 			size: file.size,
 			path: file.path,
+			url: file.url, // Cloudinary URL
 		});
 
 		const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
@@ -127,49 +129,30 @@ exports.uploadAvatar = async (userId, file) => {
 			throw new AppError('Không tìm thấy người dùng', 404);
 		}
 
-		// Get old avatar path for cleanup
+		// Get old avatar URL for cleanup
 		const oldAvatarUrl = user.profile_image;
 
-		// Create new avatar URL with FULL URL
-		const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-		const avatarUrl = `${baseUrl}/uploads/avatars/${file.filename}`;
+		// With Cloudinary, file.url contains the full Cloudinary URL
+		const avatarUrl = file.url || file.path;
 
 		// Update user with new avatar URL
 		await user.update({ profile_image: avatarUrl });
 
-		// Clean up old avatar file (if it exists and is not a default image)
-		if (oldAvatarUrl && oldAvatarUrl.includes('/uploads/avatars/')) {
-			try {
-				// Extract filename from old URL
-				const oldFilename = oldAvatarUrl.split('/').pop();
-				const oldFilePath = path.join(__dirname, '../../uploads/avatars/', oldFilename);
-				if (fs.existsSync(oldFilePath)) {
-					fs.unlinkSync(oldFilePath);
-					console.log('🗑️ Cleaned up old avatar:', oldFilePath);
-				}
-			} catch (cleanupError) {
-				console.warn('⚠️ Failed to cleanup old avatar:', cleanupError.message);
-			}
+		// Clean up old avatar from Cloudinary if it exists
+		if (oldAvatarUrl && oldAvatarUrl !== avatarUrl) {
+			await cleanupOldImage(oldAvatarUrl, avatarUrl);
 		}
 
-		logger.info(`Avatar uploaded successfully: ${user.email}, file: ${file.filename}`);
+		logger.info(`Avatar uploaded successfully: ${user.email}, Cloudinary URL: ${avatarUrl}`);
 
 		return {
 			message: 'Avatar uploaded successfully',
-			avatar_url: avatarUrl, // Full URL
+			avatar_url: avatarUrl, // Full Cloudinary URL
 			user: { ...user.toJSON(), password: undefined },
 		};
 	} catch (error) {
-		// Clean up uploaded file on error
-		if (file && file.path && fs.existsSync(file.path)) {
-			try {
-				fs.unlinkSync(file.path);
-				console.log('🗑️ Cleaned up failed upload file:', file.path);
-			} catch (cleanupError) {
-				console.warn('⚠️ Failed to cleanup upload file:', cleanupError.message);
-			}
-		}
-
+		// With Cloudinary, we don't need to clean up local files
+		// Cloudinary handles cleanup automatically
 		throw error;
 	}
 };

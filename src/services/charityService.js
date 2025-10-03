@@ -347,7 +347,7 @@ exports.uploadDocument = async (userId, file, documentData = {}) => {
   const charity = await Charity.findOne({ where: { user_id: userId } });
   if (!charity) throw new AppError('Bạn chưa đăng ký tổ chức từ thiện', 404);
 
-  const documentUrl = `/uploads/documents/${file.filename}`;
+  const documentUrl = file.url; // Cloudinary URL
   const currentDocuments = Array.isArray(charity.verification_documents)
     ? charity.verification_documents
     : [];

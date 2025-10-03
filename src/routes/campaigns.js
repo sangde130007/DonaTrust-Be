@@ -8,15 +8,15 @@ const authMiddleware = require('../middleware/authMiddleware');
 const reportController = require('../controllers/reportCampaignController');
 
 const {
-  createCampaignUpload,
   handleMulterError,
   uploadCampaignSingleImage,
   uploadCampaignImages,
   uploadUpdateImages, // ✅ dùng uploader updates từ uploadMiddleware
+  uploadQrImage,
 } = require('../middleware/uploadMiddleware');
-
-// Multer instance cho campaign (10MB/ảnh theo middleware)
-const upload = createCampaignUpload();
+const multer = require('multer');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const { cloudinary } = require('../config/cloudinary');
 
 /** Public routes */
 router.get('/', campaignController.getAllCampaigns);
@@ -24,16 +24,37 @@ router.get('/featured', campaignController.getFeaturedCampaigns);
 router.get('/categories', campaignController.getCategories);
 router.get('/:id', campaignController.getCampaignById);
 
+// Create campaign upload middleware that handles multiple fields
+const uploadCampaignCreation = multer({
+  storage: new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+      folder: 'donatrust/campaigns',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+      transformation: [
+        { width: 800, height: 600, crop: 'fill', gravity: 'auto' },
+        { quality: 'auto' }
+      ],
+      public_id: (req, file) => {
+        const timestamp = Date.now();
+        const randomString = Math.random().toString(36).substring(2, 8);
+        return `campaign_${file.fieldname}_${timestamp}_${randomString}`;
+      }
+    }
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+}).fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'images', maxCount: 10 },
+  { name: 'qr_image', maxCount: 1 },
+]);
+
 /** Create / Update / Delete */
 router.post(
   '/',
   authMiddleware,
   requireCharity,
-  upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'images', maxCount: 10 },
-    { name: 'qr_image', maxCount: 1 },
-  ]),
+  uploadCampaignCreation, // Use Cloudinary for multiple fields
   handleMulterError,
   campaignController.create
 );

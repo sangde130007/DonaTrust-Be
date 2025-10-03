@@ -99,12 +99,12 @@
           });
         }
 
-        // 2) Chuẩn hoá file -> URL public (/uploads/campaigns/<filename>)
-        const fileToUrl = (f) => (f ? `/uploads/campaigns/${f.filename}` : null);
+        // 2) Chuẩn hoá file -> Cloudinary URL
+        const fileToUrl = (f) => (f ? f.url : null); // Cloudinary URL
 
-        const image_url      = fileToUrl(req.files?.image?.[0]);                       // ảnh đại diện
-        const gallery_images = (req.files?.images || []).map(fileToUrl).filter(Boolean); // mảng URL
-        const qr_code_url    = fileToUrl(req.files?.qr_image?.[0]);                    // QR
+        const image_url      = fileToUrl(req.files?.image?.[0]); // Cover image
+        const gallery_images = (req.files?.images || []).map(fileToUrl).filter(Boolean); // Gallery images
+        const qr_code_url    = fileToUrl(req.files?.qr_image?.[0]); // QR image
 
         // 3) Payload tạo campaign
         const payload = {
