@@ -193,12 +193,12 @@ const specs = swaggerJsdoc(swaggerOptions);
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); 
     const allowedOrigins = [
-      'http://localhost:4028', 
-      'https://donastrust.info.vn'
+      'http://localhost:4028',
+      'https://donastrust.info.vn',
+      'https://www.donastrust.info.vn'
     ];
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin) || !origin) {
       return callback(null, true);
     } else {
       return callback(new Error('Not allowed by CORS'));
