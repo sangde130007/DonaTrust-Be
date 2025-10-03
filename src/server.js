@@ -85,7 +85,7 @@ const swaggerOptions = {
       {
         url:
           process.env.NODE_ENV === 'production'
-            ? 'https://api.donatrust.com'
+            ? 'https://api.donastrust.com'
             : `http://localhost:${process.env.PORT || 3000}`,
         description:
           process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server',
