@@ -94,9 +94,7 @@ exports.createCampaign = async (userId, campaignData, file) => {
   if (startDate < today) throw new AppError('Ngày bắt đầu không thể là quá khứ', 400);
   if (endDate <= startDate) throw new AppError('Ngày kết thúc phải sau ngày bắt đầu', 400);
 
-  const qr_code_url = file
-    ? file.url // Cloudinary URL
-    : (campaignData.qr_code_url?.trim() || null);
+  const qr_code_url = file ? file.path : (campaignData.qr_code_url?.trim() || null);
 
   // Tạo campaign — set rõ field để tránh ghi bừa
   const campaign = await Campaign.create({
@@ -274,7 +272,13 @@ exports.deleteMyCampaign = async (userId, campaignId) => {
 /**
  * Thêm progress update
  */
+const { randomUUID } = require('crypto');
+
 exports.addProgressUpdate = async (userId, campaignId, updateData) => {
+  if (!updateData.title && !updateData.content) {
+    throw new AppError('Cần ít nhất tiêu đề hoặc nội dung', 400);
+  }
+
   const charity = await Charity.findOne({ where: { user_id: userId } });
   if (!charity) throw new AppError('Bạn chưa đăng ký tổ chức từ thiện', 404);
 
@@ -283,12 +287,27 @@ exports.addProgressUpdate = async (userId, campaignId, updateData) => {
   });
   if (!campaign) throw new AppError('Không tìm thấy chiến dịch', 404);
 
+  let images = [];
+  if (updateData.images && Array.isArray(updateData.images)) {
+    for (const file of updateData.images) {
+      if (file.buffer) {
+        const cloudinaryUrl = await uploadToCloudinary(file.buffer, `campaigns/${campaignId}/updates`);
+        images.push(cloudinaryUrl);
+      } else {
+        images.push(file); // Giả sử là URL
+      }
+    }
+  }
+
   const newUpdate = {
-    id: Date.now().toString(),
+    id: randomUUID(),
     date: new Date().toISOString(),
-    title: updateData.title,
-    content: updateData.content,
-    images: updateData.images || [],
+    created_by: userId,
+    title: updateData.title || null,
+    content: updateData.content || '',
+    spent_amount: updateData.spent_amount ? Number(updateData.spent_amount) : null,
+    spent_items: updateData.spent_items || [],
+    images,
   };
 
   const currentUpdates = Array.isArray(campaign.progress_updates) ? campaign.progress_updates : [];
@@ -454,7 +473,7 @@ exports.uploadImage = async (campaignId, file, userId) => {
   });
   if (!campaign) throw new AppError('Không tìm thấy chiến dịch hoặc bạn không có quyền', 404);
 
-  const imageUrl = file.url; // Cloudinary URL
+  const imageUrl = file.path; // Cloudinary URL
   await campaign.update({ image_url: imageUrl });
 
   logger.info(`Campaign image uploaded: ${campaign.title}, file: ${file.filename}`);
@@ -481,7 +500,7 @@ exports.uploadImages = async (campaignId, files, userId) => {
   });
   if (!campaign) throw new AppError('Không tìm thấy chiến dịch hoặc bạn không có quyền', 404);
 
-  const uploadedImages = list.map((f) => f.url); // Cloudinary URLs
+  const uploadedImages = list.map((f) => f.path); // Cloudinary URLs // Cloudinary URLs
   const currentGallery = Array.isArray(campaign.gallery_images) ? campaign.gallery_images : [];
   const updatedGallery = [...currentGallery, ...uploadedImages];
 

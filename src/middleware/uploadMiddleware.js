@@ -211,30 +211,38 @@ const uploadUpdateImagesLocal = createUpdatesUpload().array('images', 10);
 
 /* ===== Instance: upload cho Charity Registration ===== */
 // Use Cloudinary for charity registration
+/* ===== Instance: upload cho Charity Registration ===== */
 const uploadCharityRegistration = multer({
   storage: new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-      folder: 'donatrust/charity-registration',
-      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx'],
-      transformation: [
-        { quality: 'auto' }
-      ],
-      public_id: (req, file) => {
-        const timestamp = Date.now();
-        const randomString = Math.random().toString(36).substring(2, 8);
-        return `charity_${file.fieldname}_${timestamp}_${randomString}`;
-      }
+    cloudinary,
+    params: (req, file) => {
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 8);
+
+      const mime = file.mimetype;
+      const isImage = mime.startsWith('image/');
+      const isDoc = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ].includes(mime);
+
+      return {
+        folder: 'donatrust/charity-registration',
+        resource_type: isImage ? 'image' : 'raw', 
+        // chỉ set allowed_formats cho ảnh thôi, raw thì để Cloudinary nhận tất cả
+        allowed_formats: isImage ? ['jpg','jpeg','png','gif','webp'] : undefined,
+        public_id: `charity_${file.fieldname}_${timestamp}_${randomString}`,
+      };
     }
   }),
   fileFilter: charityRegistrationFileFilter,
   limits: { fileSize: 20 * 1024 * 1024 },
 }).fields([
-  { name: 'license', maxCount: 1 },
-  { name: 'description', maxCount: 1 },
-  { name: 'logo', maxCount: 1 },
+  { name: 'license', maxCount: 1 },      // PDF / DOC / DOCX
+  { name: 'description', maxCount: 1 },  // PDF / DOC / DOCX
+  { name: 'logo', maxCount: 1 },         // Image only
 ]);
-
 /* ============ Multer error handler ============ */
 const handleMulterError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {

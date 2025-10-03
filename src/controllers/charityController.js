@@ -136,35 +136,44 @@ exports.registerCharity = [
 
   async (req, res, next) => {
     try {
+      // Multer + Cloudinary kết quả
       const licenseFile = req.files?.license?.[0] || null;
       const descFile    = req.files?.description?.[0] || null;
       const logoFile    = req.files?.logo?.[0] || null;
-
-      // With Cloudinary, files already have full URLs
-      const license_url     = licenseFile ? licenseFile.url : null;
-      const description_url = descFile    ? descFile.url    : null;
-      const logo_url        = logoFile    ? logoFile.url    : null;
-
+  
+      // Cloudinary / storage có thể trả nhiều key. fallback trong thứ tự phổ biến:
+      const getFileUrl = (f) => {
+        if (!f) return null;
+        return f.url || f.path || f.secure_url || f.location || null;
+      };
+  
+      const license_url     = getFileUrl(licenseFile);
+      const description_url = getFileUrl(descFile);
+      const logo_url        = getFileUrl(logoFile);
+  
+      // Nếu DB require license_document NOT NULL -> bắt buộc phải có file license
+      if (!license_url) {
+        return res.status(400).json({ status: 'error', message: 'Vui lòng upload file giấy phép (license).' });
+      }
+  
       const payload = {
         ...req.body,
+        // controller gửi key mà service mapping sẵn (service chấp nhận license_url hoặc license_document)
         license_url,
         description_url,
         logo_url,
       };
-
+  
       const charity = await charityService.registerCharity(req.user.user_id, payload);
-
+  
       res.status(201).json({
         message: 'Đăng ký tổ chức từ thiện thành công, đang chờ xác minh',
         charity,
-        license_url,
-        description_url,
-        logo_url,
       });
     } catch (error) {
       next(error);
     }
-  },
+  }
 ];
 
 /* ======================= MY CHARITY ======================= */

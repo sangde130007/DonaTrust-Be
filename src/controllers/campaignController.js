@@ -2,7 +2,7 @@
   const { check } = require('express-validator');
   const campaignService = require('../services/campaignService');
   const validate = require('../middleware/validationMiddleware');
-  const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinaryUpload');
+  const { cloudinary } = require('../config/cloudinary'); // Import cloudinary
 
 
   // ================== PUBLIC ==================
@@ -100,7 +100,7 @@
         }
 
         // 2) Chuẩn hoá file -> Cloudinary URL
-        const fileToUrl = (f) => (f ? f.url : null); // Cloudinary URL
+        const fileToUrl = (f) => (f ? f.path : null);// Cloudinary URL
 
         const image_url      = fileToUrl(req.files?.image?.[0]); // Cover image
         const gallery_images = (req.files?.images || []).map(fileToUrl).filter(Boolean); // Gallery images
@@ -218,16 +218,23 @@
   exports.createCampaignUpdate = async (req, res, next) => {
     try {
       const { id } = req.params;
-
+  
+      // Kiểm tra campaign
       const campaign = await Campaign.findOne({ where: { campaign_id: id } });
-      if (!campaign) return res.status(404).json({ message: 'Không tìm thấy chiến dịch' });
-
+      if (!campaign) {
+        return res.status(404).json({ message: 'Không tìm thấy chiến dịch' });
+      }
+  
       const { title, content, spent_amount } = req.body;
       if (!title && !content) {
         return res.status(400).json({ message: 'Cần ít nhất tiêu đề hoặc nội dung.' });
       }
-
-      // spent_items: JSON string -> array [{label, amount}]
+  
+      // Debug payload
+      console.log('req.body:', req.body);
+      console.log('req.files:', req.files);
+  
+      // Xử lý spent_items
       let spent_items = null;
       if (req.body.spent_items) {
         try {
@@ -235,37 +242,46 @@
           if (Array.isArray(parsed)) {
             const cleaned = parsed
               .filter((it) => (it.label?.trim() || '') !== '' || !isNaN(Number(it.amount)))
-              .map((it) => ({ label: String(it.label || '').trim(), amount: Number(it.amount || 0) }));
+              .map((it) => ({
+                label: String(it.label || '').trim(),
+                amount: Number(it.amount || 0),
+              }));
             if (cleaned.length) spent_items = cleaned;
           }
         } catch {
           return res.status(400).json({ message: 'spent_items không phải JSON hợp lệ' });
         }
       }
-
-       const images = [];
-    if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        try {
-          // Upload từ buffer lên Cloudinary
-          const cloudinaryUrl = await uploadToCloudinary(
-            file.buffer,
-            `campaigns/${id}/updates` // Folder trên Cloudinary
-          );
-          images.push(cloudinaryUrl);
-        } catch (uploadErr) {
-          console.error('Lỗi upload ảnh lên Cloudinary:', uploadErr);
-          // Có thể skip hoặc throw error tùy yêu cầu
-          // Ở đây mình skip ảnh lỗi, tiếp tục upload ảnh khác
+  
+      // Xử lý ảnh
+      const images = [];
+      if (req.files && req.files.length > 0) {
+        for (const file of req.files) {
+          console.log('Processing file:', file.originalname, file.mimetype, file.size);
+          try {
+            // URL ảnh đã được upload bởi multer (CloudinaryStorage)
+            const cloudinaryUrl = file.path; // file.path chứa URL Cloudinary
+            console.log('Uploaded image URL:', cloudinaryUrl);
+            images.push(cloudinaryUrl);
+          } catch (uploadErr) {
+            console.error('Lỗi xử lý ảnh:', uploadErr);
+          }
+        }
+        if (req.files.length > 0 && images.length === 0) {
+          console.warn('Tất cả ảnh upload thất bại');
         }
       }
-    }
+  
+      // Kiểm tra author
       const authorId = String(req.user?.user_id || req.user?.id || '');
-      const now = new Date().toISOString();
-
+      if (!authorId) {
+        return res.status(401).json({ message: 'Không xác định được người dùng' });
+      }
+  
+      // Tạo update mới
       const newUpdate = {
         id: crypto.randomUUID(),
-        created_at: now,
+        created_at: new Date().toISOString(),
         created_by: authorId,
         title: title || null,
         content: content || '',
@@ -273,30 +289,32 @@
           spent_amount != null && String(spent_amount).trim() !== ''
             ? Number(spent_amount)
             : null,
-        spent_items, // có thể null
-        images,      // []
+        spent_items,
+        images,
       };
-
-   // controllers/campaignController.js -> createCampaignUpdate
-
-const arr = Array.isArray(campaign.progress_updates) ? campaign.progress_updates : [];
-arr.push(newUpdate);
-
-await Campaign.update(
-  { progress_updates: arr, updated_at: new Date() },
-  { where: { campaign_id: id } }
-);
-
-// (tuỳ chọn) lấy lại dữ liệu mới để trả ra
-const saved = await Campaign.findOne({ where: { campaign_id: id } });
-
-return res.status(201).json({
-  message: 'Tạo cập nhật thành công',
-  update: newUpdate,
-  total_updates: saved?.progress_updates?.length || arr.length
-});
-
+  
+      console.log('newUpdate before save:', JSON.stringify(newUpdate, null, 2));
+  
+      // Lưu vào progress_updates
+      const arr = Array.isArray(campaign.progress_updates) ? campaign.progress_updates : [];
+      arr.push(newUpdate);
+  
+      await Campaign.update(
+        { progress_updates: arr, updated_at: new Date() },
+        { where: { campaign_id: id } }
+      );
+  
+      // Kiểm tra database
+      const saved = await Campaign.findOne({ where: { campaign_id: id } });
+      console.log('Saved progress_updates:', JSON.stringify(saved.progress_updates, null, 2));
+  
+      return res.status(201).json({
+        message: 'Tạo cập nhật thành công',
+        update: newUpdate,
+        total_updates: saved?.progress_updates?.length || arr.length,
+      });
     } catch (err) {
+      console.error('Error in createCampaignUpdate:', err);
       next(err);
     }
   };
