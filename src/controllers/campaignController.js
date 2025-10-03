@@ -2,6 +2,8 @@
   const { check } = require('express-validator');
   const campaignService = require('../services/campaignService');
   const validate = require('../middleware/validationMiddleware');
+  const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinaryUpload');
+
 
   // ================== PUBLIC ==================
 
@@ -241,9 +243,23 @@
         }
       }
 
-      // Ảnh từ uploader updates -> /uploads/updates/<filename>
-      const images = (req.files || []).map((f) => `/uploads/updates/${f.filename}`);
-
+       const images = [];
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        try {
+          // Upload từ buffer lên Cloudinary
+          const cloudinaryUrl = await uploadToCloudinary(
+            file.buffer,
+            `campaigns/${id}/updates` // Folder trên Cloudinary
+          );
+          images.push(cloudinaryUrl);
+        } catch (uploadErr) {
+          console.error('Lỗi upload ảnh lên Cloudinary:', uploadErr);
+          // Có thể skip hoặc throw error tùy yêu cầu
+          // Ở đây mình skip ảnh lỗi, tiếp tục upload ảnh khác
+        }
+      }
+    }
       const authorId = String(req.user?.user_id || req.user?.id || '');
       const now = new Date().toISOString();
 
@@ -300,6 +316,16 @@ exports.deleteCampaignUpdate = async (req, res, next) => {
     const me = String(req.user?.user_id || req.user?.id || '');
     if (req.user.role !== 'admin' && String(upd.created_by || '') !== me) {
       return res.status(403).json({ message: 'Bạn không thể xoá cập nhật của người khác' });
+    }
+    if (upd.images && Array.isArray(upd.images) && upd.images.length > 0) {
+      for (const imageUrl of upd.images) {
+        try {
+          await deleteFromCloudinary(imageUrl);
+        } catch (delErr) {
+          console.error('Lỗi xóa ảnh Cloudinary:', delErr);
+          // Không throw error, tiếp tục xóa record
+        }
+      }
     }
 
     campaign.progress_updates = list.filter(u => String(u.id) !== String(updateId));

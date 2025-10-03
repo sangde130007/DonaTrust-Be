@@ -76,15 +76,8 @@ const createReportStorage = () =>
     },
   });
 
-const createUpdatesStorage = () =>
-  multer.diskStorage({
-    destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads/updates')),
-    filename: (req, file, cb) => {
-      const userId = req.user?.user_id || 'unknown';
-      const ext = path.extname(file.originalname);
-      cb(null, `update_${userId}-${Date.now()}-${Math.floor(Math.random() * 1e9)}${ext}`);
-    },
-  });
+const createUpdatesStorage = () => multer.memoryStorage();
+
 
 /* ============ File filters ============ */
 const imageFileFilter = (req, file, cb) => {
